@@ -1,0 +1,29 @@
+# Build and non-stress tests for Linux and Windows.
+# Trigger is manual (workflow_dispatch) until the repository owner enables
+# automatic runs. Physical stress tests are never run in CI.
+name: ci
+on:
+  workflow_dispatch:
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: Ballin Electric Validation Suite
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux native dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libfontconfig-dev libpango1.0-dev libcairo2-dev libglu1-mesa-dev
+      - name: Toolchain
+        run: rustup show
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test (fixtures and low-impact checks only)
+        run: cargo test --workspace --locked
