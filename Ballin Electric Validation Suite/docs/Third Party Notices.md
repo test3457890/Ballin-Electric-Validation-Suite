@@ -24,21 +24,21 @@ Reference product names (Prime95, FurMark, OCCT, PC-Doctor, PassMark, HWiNFO, AI
 
 ## Rust crate dependencies
 
-76 third-party crates are compiled into at least one target (runtime and build dependencies, all platforms; dev-only test crates excluded). License expressions as declared by each crate:
+78 third-party crates are compiled into at least one target (runtime and build dependencies, all platforms; dev-only test crates excluded). License expressions as declared by each crate:
 
 | Count | License expression |
 | --- | --- |
 | 52 | MIT OR Apache-2.0 |
-| 12 | MIT |
+| 14 | MIT |
 | 6 | MIT/Apache-2.0 |
+| 1 | Apache-2.0 / MIT |
+| 1 | Zlib |
+| 1 | ISC |
+| 1 | Unlicense OR MIT |
 | 1 | (MIT OR Apache-2.0) AND Unicode-3.0 |
 | 1 | Apache-2.0 OR MIT |
-| 1 | Apache-2.0 / MIT |
-| 1 | ISC |
-| 1 | Zlib |
-| 1 | Unlicense OR MIT |
 
-No copyleft (GPL/LGPL/MPL/AGPL) or unlicensed crates were found. All are permissive with attribution requirements: ship this list with the full license texts. Machine-readable manifest: [sbom/cargo-dependencies.json](sbom/cargo-dependencies.json). Policy file for automated checks: `deny.toml` (cargo-deny).
+No copyleft (GPL/LGPL/MPL/AGPL) or unlicensed crates were found. All are permissive with attribution requirements: ship this list with the full license texts. Machine-readable manifest: [sbom/cargo-dependencies.json](sbom/cargo-dependencies.json). Automated checks on 2026-11-25: `cargo deny check` (cargo-deny 0.22.1, policy `deny.toml`) passed advisories, bans, licenses and sources, with duplicate-version warnings only. `cargo audit` reported no known vulnerabilities after upgrading rusqlite 0.37 → 0.43. Bundled SQLite via `libsqlite3-sys` 0.40 fixes RUSTSEC-2026-0459 / CVE-2026-119375, which affected 0.35.
 
 | Crate | Version | License |
 | --- | --- | --- |
@@ -73,17 +73,17 @@ No copyleft (GPL/LGPL/MPL/AGPL) or unlicensed crates were found. All are permiss
 | fltk | 1.5.24 | MIT |
 | fltk-sys | 1.5.24 | MIT |
 | fnv | 1.0.7 | Apache-2.0 / MIT |
-| foldhash | 0.1.5 | Zlib |
+| foldhash | 0.2.0 | Zlib |
 | generic-array | 0.14.7 | MIT |
-| hashbrown | 0.15.5 | MIT OR Apache-2.0 |
-| hashlink | 0.10.0 | MIT OR Apache-2.0 |
+| hashbrown | 0.17.2 | MIT OR Apache-2.0 |
+| hashlink | 0.12.2 | MIT OR Apache-2.0 |
 | heck | 0.5.0 | MIT OR Apache-2.0 |
 | ident_case | 1.0.1 | MIT/Apache-2.0 |
 | is_terminal_polyfill | 1.70.2 | MIT OR Apache-2.0 |
 | itoa | 1.0.19 | MIT OR Apache-2.0 |
 | libc | 0.2.191 | MIT OR Apache-2.0 |
 | libloading | 0.8.9 | ISC |
-| libsqlite3-sys | 0.35.0 | MIT |
+| libsqlite3-sys | 0.40.0 | MIT |
 | memchr | 2.8.3 | Unlicense OR MIT |
 | minipaste | 0.1.0 | MIT |
 | nvml-wrapper | 0.11.0 | MIT OR Apache-2.0 |
@@ -93,7 +93,8 @@ No copyleft (GPL/LGPL/MPL/AGPL) or unlicensed crates were found. All are permiss
 | pkg-config | 0.3.34 | MIT OR Apache-2.0 |
 | proc-macro2 | 1.0.107 | MIT OR Apache-2.0 |
 | quote | 1.0.47 | MIT OR Apache-2.0 |
-| rusqlite | 0.37.0 | MIT |
+| rsqlite-vfs | 0.2.0 | MIT |
+| rusqlite | 0.43.0 | MIT |
 | serde | 1.0.229 | MIT OR Apache-2.0 |
 | serde_core | 1.0.229 | MIT OR Apache-2.0 |
 | serde_derive | 1.0.229 | MIT OR Apache-2.0 |
@@ -101,14 +102,15 @@ No copyleft (GPL/LGPL/MPL/AGPL) or unlicensed crates were found. All are permiss
 | sha2 | 0.10.9 | MIT OR Apache-2.0 |
 | shlex | 2.0.1 | MIT OR Apache-2.0 |
 | smallvec | 1.16.6 | MIT OR Apache-2.0 |
+| sqlite-wasm-rs | 0.6.3 | MIT |
 | static_assertions | 1.1.0 | MIT OR Apache-2.0 |
 | strsim | 0.11.1 | MIT |
 | syn | 3.0.10 | MIT OR Apache-2.0 |
 | syn | 2.0.119 | MIT OR Apache-2.0 |
 | thiserror | 2.0.21 | MIT OR Apache-2.0 |
 | thiserror | 1.0.69 | MIT OR Apache-2.0 |
-| thiserror-impl | 1.0.69 | MIT OR Apache-2.0 |
 | thiserror-impl | 2.0.21 | MIT OR Apache-2.0 |
+| thiserror-impl | 1.0.69 | MIT OR Apache-2.0 |
 | typenum | 1.20.1 | MIT OR Apache-2.0 |
 | unicode-ident | 1.0.27 | (MIT OR Apache-2.0) AND Unicode-3.0 |
 | utf8parse | 0.2.2 | Apache-2.0 OR MIT |

@@ -191,7 +191,7 @@
   },
   {
    "name": "foldhash",
-   "version": "0.1.5",
+   "version": "0.2.0",
    "license": "Zlib",
    "repository": "https://github.com/orlp/foldhash"
   },
@@ -203,15 +203,15 @@
   },
   {
    "name": "hashbrown",
-   "version": "0.15.5",
+   "version": "0.17.2",
    "license": "MIT OR Apache-2.0",
    "repository": "https://github.com/rust-lang/hashbrown"
   },
   {
    "name": "hashlink",
-   "version": "0.10.0",
+   "version": "0.12.2",
    "license": "MIT OR Apache-2.0",
-   "repository": "https://github.com/kyren/hashlink"
+   "repository": "https://github.com/djc/hashlink"
   },
   {
    "name": "heck",
@@ -251,7 +251,7 @@
   },
   {
    "name": "libsqlite3-sys",
-   "version": "0.35.0",
+   "version": "0.40.0",
    "license": "MIT",
    "repository": "https://github.com/rusqlite/rusqlite"
   },
@@ -310,8 +310,14 @@
    "repository": "https://github.com/dtolnay/quote"
   },
   {
+   "name": "rsqlite-vfs",
+   "version": "0.2.0",
+   "license": "MIT",
+   "repository": "https://github.com/Spxg/sqlite-wasm-rs"
+  },
+  {
    "name": "rusqlite",
-   "version": "0.37.0",
+   "version": "0.43.0",
    "license": "MIT",
    "repository": "https://github.com/rusqlite/rusqlite"
   },
@@ -358,6 +364,12 @@
    "repository": "https://github.com/smallvec/smallvec"
   },
   {
+   "name": "sqlite-wasm-rs",
+   "version": "0.6.3",
+   "license": "MIT",
+   "repository": "https://github.com/Spxg/sqlite-wasm-rs"
+  },
+  {
    "name": "static_assertions",
    "version": "1.1.0",
    "license": "MIT OR Apache-2.0",
@@ -395,13 +407,13 @@
   },
   {
    "name": "thiserror-impl",
-   "version": "1.0.69",
+   "version": "2.0.21",
    "license": "MIT OR Apache-2.0",
    "repository": "https://github.com/dtolnay/thiserror"
   },
   {
    "name": "thiserror-impl",
-   "version": "2.0.21",
+   "version": "1.0.69",
    "license": "MIT OR Apache-2.0",
    "repository": "https://github.com/dtolnay/thiserror"
   },

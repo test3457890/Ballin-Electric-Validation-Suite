@@ -31,7 +31,8 @@ Environment: Ubuntu 24.04.5 LTS, kernel 6.18.44, Intel Xeon (virtualized, 4 vCPU
 | `bevalidate inventory` / `capabilities` | Live. CPU, memory, 6 virtio disks, 11 PCI functions and eth0 detected. DMI, cpufreq, ECC, Secure Boot and all sensors reported **unavailable** with reasons. |
 | `bevalidate run --profile quick --unit DEV-VM-0001 --output …` | Live, 19.5 s, exit 2 (INCONCLUSIVE). INV-001 PASS; SNS-001 WARNING (BE-SNS-002, no temperature telemetry); CPU-001 PASS (4 pinned threads, 44 Lucas-Lehmer verifications); MEM-001 PASS (256 MiB, 335,544,320 words verified, 0 mismatches); STO-001 PASS (128 MiB scratch, SHA-256 verified); OS-001 INCONCLUSIVE (BE-OS-002, journal has no kernel log); STO-002, PCIE-001, GPU-001 UNSUPPORTED; NET-001 PASS; FW-001 WARNING (no TPM). Release policy: **not eligible** (correct). |
 | `bevalidate-gui --autorun quick` (Xvfb) | Same engine path; run persisted; screenshots reviewed against the approved design reference. |
-| cargo-deny / cargo-audit | See "License and advisory checks" below. |
+| `cargo deny check` | advisories ok, bans ok, licenses ok, sources ok (duplicate-version warnings only) |
+| `cargo audit` | Initially **1 vulnerability**: RUSTSEC-2026-0459 (bundled SQLite in libsqlite3-sys 0.35, CVE-2026-119375, medium). Fixed by upgrading rusqlite 0.37 → 0.43 (libsqlite3-sys 0.40); re-run reports no vulnerabilities. |
 
 ## Known issues and limitations
 
@@ -77,4 +78,4 @@ Environment: Ubuntu 24.04.5 LTS, kernel 6.18.44, Intel Xeon (virtualized, 4 vCPU
 
 ## License and advisory checks
 
-Dependency licenses were reviewed from `cargo metadata`. All 76 third-party crates are permissive (see [Third Party Notices](Third%20Party%20Notices.md)). The cargo-deny and cargo-audit results are recorded in the commit that adds them.
+Dependency licenses were reviewed from `cargo metadata`. All 78 third-party crates are permissive (see [Third Party Notices](Third%20Party%20Notices.md)). cargo-deny and cargo-audit pass as recorded above. Re-run both before every release.
