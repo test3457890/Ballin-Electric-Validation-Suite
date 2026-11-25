@@ -30,7 +30,7 @@ Native build dependencies and Windows notes: [Build](docs/Build.md). CLI referen
 
 Genuine screenshot of the running application: BE Validation 0.1.0, Ubuntu 24.04 cloud development VM (virtualized, not physical hardware), Linux under Xvfb, Quick Diagnostics with live readings from that VM (no fixture data). The VM exposes no sensors, so the outcome is correctly *not* releasable:
 
-![Running application on the development VM](docs/screenshots/Main%20Window%20(dev%20VM,%20quick%20profile).png)
+![Running application on the development VM](docs/screenshots/v0.1.0-linux-devvm-tests.png)
 
 ## Workspace layout
 

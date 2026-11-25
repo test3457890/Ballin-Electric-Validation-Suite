@@ -221,9 +221,16 @@ fn stop_marks_remaining_steps_not_run() {
     )
     .unwrap();
     let platform = be_platform::native();
+    // Stop only once the first step's worker is running (inventory at run
+    // start can take seconds on CI runners), then check the remaining step.
+    let running = AtomicBool::new(false);
     let s = std::thread::scope(|sc| {
         sc.spawn(|| {
-            std::thread::sleep(std::time::Duration::from_millis(400));
+            let t = std::time::Instant::now();
+            while !running.load(std::sync::atomic::Ordering::SeqCst) && t.elapsed().as_secs() < 60 {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(300));
             cancel.store(true, std::sync::atomic::Ordering::SeqCst);
         });
         run_profile(
@@ -234,7 +241,11 @@ fn stop_marks_remaining_steps_not_run() {
             platform.as_ref(),
             None,
             &cancel,
-            &mut |_| {},
+            &mut |e| {
+                if matches!(e, EngineEvent::StepProgress { .. }) {
+                    running.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+            },
         )
         .unwrap()
     });
