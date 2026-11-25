@@ -1,6 +1,17 @@
 [package]
 name = "be-storage"
-version = "0.1.0"
-edition = "2024"
+description = "SQLite repository, schema migrations and records for BE Validation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
 
 [dependencies]
+be-core.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
