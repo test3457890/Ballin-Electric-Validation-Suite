@@ -28,10 +28,10 @@ jobs:
         shell: bash
         working-directory: Ballin Electric Validation Suite
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Linux native dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libfontconfig-dev libpango1.0-dev libcairo2-dev libglu1-mesa-dev xvfb mesa-vulkan-drivers libvulkan1
+        run: sudo apt-get update && sudo apt-get install -y cmake libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libfontconfig-dev libpango1.0-dev libcairo2-dev libglu1-mesa-dev xvfb xauth mesa-vulkan-drivers libvulkan1
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.97.0"
@@ -40,41 +40,19 @@ jobs:
         with:
           workspaces: "Ballin Electric Validation Suite -> target"
       - name: Format
-        run: cargo fmt --all -- --check 2>&1 | tee fmt.log
+        run: ../.github/ci/step.sh fmt cargo fmt --all -- --check
       - name: Lint
-        run: |
-          set -o pipefail
-          cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tee clippy.log
+        run: ../.github/ci/step.sh clippy cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Test (fixtures and low-impact checks only)
-        run: |
-          set -o pipefail
-          cargo test --workspace --locked 2>&1 | tee test.log
+        run: ../.github/ci/step.sh test cargo test --workspace --locked
       - name: GUI smoke test (Linux, Xvfb)
         if: runner.os == 'Linux'
-        run: |
-          set -o pipefail
-          xvfb-run -a -s "-screen 0 1320x860x24" timeout 120 target/debug/bevalidate-gui --db "$RUNNER_TEMP/smoke.db" --exit-after 8
+        run: ../.github/ci/step.sh gui-smoke xvfb-run -a -s "-screen 0 1320x860x24" timeout 120 target/debug/bevalidate-gui --db "$RUNNER_TEMP/smoke.db" --exit-after 8
       - name: GUI smoke test (Windows)
         if: runner.os == 'Windows'
-        run: timeout 120 target/debug/bevalidate-gui.exe --db "$RUNNER_TEMP/smoke.db" --exit-after 8
+        run: ../.github/ci/step.sh gui-smoke timeout 120 target/debug/bevalidate-gui.exe --db "$RUNNER_TEMP/smoke.db" --exit-after 8
       - name: CLI smoke test
-        run: |
-          target/debug/bevalidate --db "$RUNNER_TEMP/cli.db" inventory
-          target/debug/bevalidate --db "$RUNNER_TEMP/cli.db" capabilities
-          set +e
-          target/debug/bevalidate --db "$RUNNER_TEMP/cli.db" run --profile quick --output "$RUNNER_TEMP/quick"
-          code=$?
-          echo "quick profile exit code: $code (0 pass, 1 fail, 2 incomplete; CI runners lack sensors so 2 is expected)"
-          test "$code" -le 2
-      - name: Report failures as annotations
-        if: failure()
-        run: |
-          for f in fmt.log clippy.log test.log; do
-            [ -f "$f" ] || continue
-            grep -E "^(error|warning)(\[|:)|panicked|FAILED|failures:|^Diff in|test result" "$f" | head -40 | while IFS= read -r line; do
-              echo "::error title=$f::${line//%/%25}"
-            done
-          done
+        run: ../.github/ci/step.sh cli-smoke bash ../.github/ci/cli-smoke.sh
   audit:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -82,7 +60,7 @@ jobs:
       run:
         working-directory: Ballin Electric Validation Suite
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.97.0"
@@ -90,13 +68,8 @@ jobs:
         with:
           tool: cargo-deny,cargo-audit
       - name: Licenses, bans, sources, advisories
-        run: cargo deny check 2>&1 | tee deny.log
+        shell: bash
+        run: ../.github/ci/step.sh deny cargo deny check
       - name: RustSec audit
-        run: cargo audit 2>&1 | tee audit.log
-      - name: Report failures as annotations
-        if: failure()
-        run: |
-          for f in deny.log audit.log; do
-            [ -f "$f" ] || continue
-            grep -E "^(error|warning)|Crate:|ID:|Title:" "$f" | head -40 | while IFS= read -r line; do echo "::error title=$f::$line"; done
-          done
+        shell: bash
+        run: ../.github/ci/step.sh audit cargo audit

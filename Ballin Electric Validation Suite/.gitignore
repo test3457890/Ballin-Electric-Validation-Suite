@@ -3,3 +3,4 @@
 *.db-journal
 /results
 /scratch
+ci-logs/
