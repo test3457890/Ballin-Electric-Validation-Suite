@@ -786,7 +786,9 @@ fn chassis_name(code: &str) -> String {
     name.to_string()
 }
 
-#[cfg(test)]
+// Fixture trees use PCI addresses such as `0000:01:00.0`, which are not
+// valid Windows file names; these Linux-provider tests run on Unix hosts.
+#[cfg(all(test, unix))]
 mod tests {
     //! FIXTURE TESTS: these build a fake sysfs/procfs tree. They validate
     //! parsing logic only and are not evidence of physical hardware support.
