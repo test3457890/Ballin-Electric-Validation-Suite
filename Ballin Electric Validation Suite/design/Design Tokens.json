@@ -1,0 +1,68 @@
+{
+  "version": "0.2",
+  "units": "logical pixels; scale with OS DPI",
+  "typography": {
+    "windows": [
+      "Segoe UI",
+      "Tahoma"
+    ],
+    "linux": "system sans-serif",
+    "monospace": [
+      "Consolas",
+      "system monospace"
+    ],
+    "default_pt_range": [
+      9,
+      10
+    ]
+  },
+  "spacing": {
+    "border": 1,
+    "control_gap": 4,
+    "panel_padding": 8,
+    "toolbar_icon_range": [
+      16,
+      24
+    ],
+    "corner_radius": 0,
+    "minimum_window": [
+      1024,
+      768
+    ]
+  },
+  "themes": {
+    "industrial": {
+      "chrome": "#D5D9DC",
+      "toolbar": "#E2E5E7",
+      "accent": "#34434E",
+      "content": "#FFFFFF",
+      "secondary": "#F1F3F4",
+      "border": "#929CA4",
+      "text": "#202020",
+      "selection": "#CBDCEE",
+      "log_background": "#181818",
+      "log_text": "#D8D8D8"
+    },
+    "classic": {
+      "chrome": "#D4D0C8",
+      "accent": "#123D79",
+      "content": "#FFFFFF",
+      "text": "#202020"
+    },
+    "dark": {
+      "chrome": "#262A2D",
+      "secondary": "#34393D",
+      "content": "#202428",
+      "text": "#E0E0E0",
+      "border": "#555B60"
+    }
+  },
+  "status": {
+    "pass": "#26752A",
+    "warning": "#946600",
+    "fail": "#BD1818",
+    "running": "#245CA2",
+    "pending": "#666666",
+    "note": "Use text labels with color. Adjust for contrast in dark/high-contrast modes."
+  }
+}
