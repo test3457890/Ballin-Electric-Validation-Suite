@@ -1,0 +1,44 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/be-core",
+    "crates/be-platform",
+    "crates/be-diagnostics",
+    "crates/be-safety",
+    "crates/be-storage",
+    "crates/be-reporting",
+    "crates/be-engine",
+    "crates/be-worker",
+    "crates/be-cli",
+    "crates/be-gui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "LicenseRef-Proprietary-Unlicensed"
+publish = false
+authors = ["Ballin Electric"]
+
+[workspace.dependencies]
+be-core = { path = "crates/be-core" }
+be-platform = { path = "crates/be-platform" }
+be-diagnostics = { path = "crates/be-diagnostics" }
+be-safety = { path = "crates/be-safety" }
+be-storage = { path = "crates/be-storage" }
+be-reporting = { path = "crates/be-reporting" }
+be-engine = { path = "crates/be-engine" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+anyhow = "1.0"
+clap = { version = "4.6", features = ["derive"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+sha2 = "0.10"
+libc = "0.2"
+tempfile = "3"
+fltk = "1.5"
+
+[profile.release]
+debug = 1

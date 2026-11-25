@@ -1,0 +1,23 @@
+[package]
+name = "be-worker"
+description = "Isolated test worker process for BE Validation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "bevalidate-worker"
+path = "src/main.rs"
+
+[dependencies]
+be-core.workspace = true
+be-platform.workspace = true
+be-diagnostics.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true
+
+[dev-dependencies]
+be-safety.workspace = true

@@ -1,0 +1,22 @@
+[package]
+name = "be-platform"
+description = "Native platform providers (Linux sysfs/procfs, Windows CIM) for BE Validation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = ["nvml"]
+# Runtime-loaded NVIDIA Management Library telemetry. NVML itself is part of
+# the NVIDIA driver and is never bundled; absence is reported as unsupported.
+nvml = ["dep:nvml-wrapper"]
+
+[dependencies]
+be-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+nvml-wrapper = { version = "0.11", optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
