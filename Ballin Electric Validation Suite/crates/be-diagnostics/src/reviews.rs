@@ -103,27 +103,26 @@ pub fn evaluate_inventory(
             None => unknown.push("memory size".into()),
         }
     }
-    if let Some(want) = m.get("gpu_count").and_then(|v| v.as_u64()) {
-        if inv.gpus.len() as u64 != want {
-            mismatches.push(format!(
-                "{} GPU(s) detected, manifest requires {want}",
-                inv.gpus.len()
-            ));
-        }
+    if let Some(want) = m.get("gpu_count").and_then(|v| v.as_u64())
+        && inv.gpus.len() as u64 != want
+    {
+        mismatches.push(format!(
+            "{} GPU(s) detected, manifest requires {want}",
+            inv.gpus.len()
+        ));
     }
-    if let Some(want) = m.get("min_storage_devices").and_then(|v| v.as_u64()) {
-        if (inv.storage.len() as u64) < want {
-            mismatches.push(format!("{} storage device(s) < {want}", inv.storage.len()));
-        }
+    if let Some(want) = m.get("min_storage_devices").and_then(|v| v.as_u64())
+        && (inv.storage.len() as u64) < want
+    {
+        mismatches.push(format!("{} storage device(s) < {want}", inv.storage.len()));
     }
-    if let Some(want) = m.get("min_network_speed_mbps").and_then(|v| v.as_i64()) {
-        if !inv
+    if let Some(want) = m.get("min_network_speed_mbps").and_then(|v| v.as_i64())
+        && !inv
             .network
             .iter()
             .any(|n| n.speed_mbps.map(|s| s >= want).unwrap_or(false))
-        {
-            mismatches.push(format!("no interface with link >= {want} Mb/s"));
-        }
+    {
+        mismatches.push(format!("no interface with link >= {want} Mb/s"));
     }
     r.coverage = format!(
         "Inventory compared against manifest `{}`",
@@ -611,36 +610,35 @@ pub fn evaluate_pcie(inv: &Inventory, expected: Option<&Value>, r: &mut TestResu
                 status = TestStatus::Fail;
                 continue;
             };
-            if let Some(w) = e.get("min_width").and_then(|v| v.as_u64()) {
-                if d.current_link_width.map(|c| (c as u64) < w).unwrap_or(true) {
-                    r.faults.push(
-                        FaultRecord::new(
-                            "BE-PCIE-002",
-                            "Link width below manifest",
-                            format!("{addr}: x{:?} < x{w}", d.current_link_width),
-                        )
-                        .on(addr),
-                    );
-                    status = TestStatus::Fail;
-                }
+            if let Some(w) = e.get("min_width").and_then(|v| v.as_u64())
+                && d.current_link_width.map(|c| (c as u64) < w).unwrap_or(true)
+            {
+                r.faults.push(
+                    FaultRecord::new(
+                        "BE-PCIE-002",
+                        "Link width below manifest",
+                        format!("{addr}: x{:?} < x{w}", d.current_link_width),
+                    )
+                    .on(addr),
+                );
+                status = TestStatus::Fail;
             }
-            if let Some(s) = e.get("min_speed_gts").and_then(|v| v.as_f64()) {
-                if d.current_link_speed
+            if let Some(s) = e.get("min_speed_gts").and_then(|v| v.as_f64())
+                && d.current_link_speed
                     .as_deref()
                     .and_then(parse_gts)
                     .map(|c| c + 1e-9 < s)
                     .unwrap_or(true)
-                {
-                    r.faults.push(
-                        FaultRecord::new(
-                            "BE-PCIE-002",
-                            "Link speed below manifest",
-                            format!("{addr}: {:?} < {s} GT/s", d.current_link_speed),
-                        )
-                        .on(addr),
-                    );
-                    status = TestStatus::Fail;
-                }
+            {
+                r.faults.push(
+                    FaultRecord::new(
+                        "BE-PCIE-002",
+                        "Link speed below manifest",
+                        format!("{addr}: {:?} < {s} GT/s", d.current_link_speed),
+                    )
+                    .on(addr),
+                );
+                status = TestStatus::Fail;
             }
         }
     }
@@ -722,18 +720,17 @@ pub fn evaluate_network(
             status = TestStatus::Warning;
         }
     }
-    if let Some(want) = expected_mbps {
-        if !phys
+    if let Some(want) = expected_mbps
+        && !phys
             .iter()
             .any(|n| n.speed_mbps.map(|s| s >= want).unwrap_or(false))
-        {
-            r.faults.push(FaultRecord::new(
-                "BE-NET-002",
-                "No link at expected speed",
-                format!("expected >= {want} Mb/s"),
-            ));
-            status = TestStatus::Fail;
-        }
+    {
+        r.faults.push(FaultRecord::new(
+            "BE-NET-002",
+            "No link at expected speed",
+            format!("expected >= {want} Mb/s"),
+        ));
+        status = TestStatus::Fail;
     }
     r.coverage = "Link state and error counters only; no traffic generated (throughput test requires authorized peer)".into();
     status

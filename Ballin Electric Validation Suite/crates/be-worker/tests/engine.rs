@@ -92,10 +92,32 @@ fn fixture_run_persists_and_blocks_release() {
 }
 
 #[test]
+fn diagnostic_profile_pass_cannot_release() {
+    let store = Store::open_in_memory().unwrap();
+    unit(&store, "DIAG-1");
+    let p = Profile::from_json(r#"{"schema":1,"id":"diag","version":"1","name":"Diag","steps":[{"test":"BE-T-CPU-001","params":{"threads":1,"max_exponent":127}}]}"#).unwrap();
+    let platform = be_platform::native();
+    let s = run_profile(
+        &cfg(false),
+        &p,
+        Some("DIAG-1"),
+        None,
+        platform.as_ref(),
+        Some(&store),
+        &AtomicBool::new(false),
+        &mut |_| {},
+    )
+    .unwrap();
+    assert_eq!(s.overall, TestStatus::Pass);
+    assert!(!s.evaluation.unwrap().eligible_for_review);
+    assert!(approve_release(&store, "DIAG-1", "qa-lead", "").is_err());
+}
+
+#[test]
 fn fixture_pass_still_cannot_be_released() {
     let store = Store::open_in_memory().unwrap();
     unit(&store, "FIX-2");
-    let p = Profile::from_json(r#"{"schema":1,"id":"f","version":"1","name":"F","steps":[{"test":"FIX-T-SLEEP","params":{"duration_ms":50}}]}"#).unwrap();
+    let p = Profile::from_json(r#"{"schema":1,"id":"f","version":"1","name":"F","release_profile":true,"steps":[{"test":"FIX-T-SLEEP","params":{"duration_ms":50}}]}"#).unwrap();
     let platform = be_platform::native();
     let s = run_profile(
         &cfg(true),
@@ -122,7 +144,7 @@ fn live_low_impact_run_with_manual_check_reaches_review_then_release() {
     let store = Store::open_in_memory().unwrap();
     unit(&store, "LIVE-1");
     let p = Profile::from_json(
-        r#"{"schema":1,"id":"live-mini","version":"1","name":"Live mini",
+        r#"{"schema":1,"id":"live-mini","version":"1","name":"Live mini","release_profile":true,
         "steps":[{"test":"BE-T-CPU-001","params":{"threads":2,"max_exponent":607},"timeout_s":120},
                  {"test":"BE-T-MEM-001","params":{"size_mib":16},"timeout_s":120}],
         "manual_checks":[{"id":"finish","label":"Finish"}]}"#,

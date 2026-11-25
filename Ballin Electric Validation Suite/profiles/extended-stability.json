@@ -6,6 +6,7 @@
   "description": "Isolated and combined error-aware high-load tests. Requires operator authorization and an APPROVED hardware safety profile. Planning durations only; not validated production limits.",
   "planned_minutes": [120, 240],
   "allow_warnings": false,
+  "release_profile": false,
   "steps": [
     { "test": "BE-T-INV-001", "timeout_s": 60 },
     { "test": "BE-T-SNS-001", "timeout_s": 60 },

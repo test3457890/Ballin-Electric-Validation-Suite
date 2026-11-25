@@ -79,10 +79,10 @@ impl HardwareSafetyProfile {
             if r.abort.is_none() && r.abort_below.is_none() {
                 return Err(format!("rule `{}` has no abort limit", r.matches));
             }
-            if let (Some(w), Some(a)) = (r.warn, r.abort) {
-                if w > a {
-                    return Err(format!("rule `{}`: warn {w} above abort {a}", r.matches));
-                }
+            if let (Some(w), Some(a)) = (r.warn, r.abort)
+                && w > a
+            {
+                return Err(format!("rule `{}`: warn {w} above abort {a}", r.matches));
             }
         }
         if p.sample_interval_ms == 0 || p.sample_interval_ms > 10_000 {
@@ -149,13 +149,14 @@ pub fn preflight(
             ));
         }
         for s in matching {
-            if let (Some(v), Some(w)) = (s.value, rule.warn) {
-                if rule.abort_below.is_none() && v >= w {
-                    return Err(format!(
-                        "{} {} is {v:.1} {} — already at/above warning limit {w}; allow cooldown",
-                        s.chip, s.label, s.unit
-                    ));
-                }
+            if let (Some(v), Some(w)) = (s.value, rule.warn)
+                && rule.abort_below.is_none()
+                && v >= w
+            {
+                return Err(format!(
+                    "{} {} is {v:.1} {} — already at/above warning limit {w}; allow cooldown",
+                    s.chip, s.label, s.unit
+                ));
             }
         }
     }

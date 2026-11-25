@@ -517,19 +517,21 @@ th{{background:#E2E5E7}} .pass{{color:#26752A;font-weight:bold}} .fail{{color:#B
         }
     }
     h.push_str("</table>");
-    if let Some(inv) = &d.inventory {
-        if !inv.unavailable.is_empty() {
-            h.push_str("<h2>Unavailable telemetry and data</h2><table><tr><th>Item</th><th>Reason</th></tr>");
-            for u in &inv.unavailable {
-                let _ = write!(
-                    h,
-                    "<tr><td>{}</td><td>{}</td></tr>",
-                    esc(&u.item),
-                    esc(&u.reason)
-                );
-            }
-            h.push_str("</table>");
+    if let Some(inv) = &d.inventory
+        && !inv.unavailable.is_empty()
+    {
+        h.push_str(
+            "<h2>Unavailable telemetry and data</h2><table><tr><th>Item</th><th>Reason</th></tr>",
+        );
+        for u in &inv.unavailable {
+            let _ = write!(
+                h,
+                "<tr><td>{}</td><td>{}</td></tr>",
+                esc(&u.item),
+                esc(&u.reason)
+            );
         }
+        h.push_str("</table>");
     }
     if let Some(e) = &d.evaluation {
         h.push_str("<h2>Release policy evaluation</h2>");

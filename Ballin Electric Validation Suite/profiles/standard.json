@@ -6,6 +6,7 @@
   "description": "Broad functional coverage with bounded moderate workloads. GPU compute/VRAM steps are required and remain UNSUPPORTED (blocking) until a GPU backend is implemented.",
   "planned_minutes": [30, 60],
   "allow_warnings": false,
+  "release_profile": true,
   "steps": [
     { "test": "BE-T-INV-001", "timeout_s": 60 },
     { "test": "BE-T-SNS-001", "timeout_s": 60 },

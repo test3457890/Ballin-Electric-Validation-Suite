@@ -290,14 +290,15 @@ fn pid_alive(pid: i64) -> bool {
 
 impl Store {
     pub fn open(path: &Path) -> Result<Store> {
-        if let Some(dir) = path.parent() {
-            if !dir.as_os_str().is_empty() && !dir.exists() {
-                std::fs::create_dir_all(dir)?;
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
-                }
+        if let Some(dir) = path.parent()
+            && !dir.as_os_str().is_empty()
+            && !dir.exists()
+        {
+            std::fs::create_dir_all(dir)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
             }
         }
         let conn = Connection::open(path)?;

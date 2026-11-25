@@ -241,32 +241,33 @@ pub fn run_supervised(
 
     let outcome: Result<TestResult, (TestStatus, &str, &str, String)> = loop {
         // Safety monitoring.
-        if let Some(m) = monitor.as_deref_mut() {
-            if Instant::now() >= next_sample && safety_abort.is_none() {
-                next_sample = Instant::now() + Duration::from_millis(m.sample_interval_ms());
-                for v in m.check() {
-                    match v {
-                        SafetyVerdict::Ok => {}
-                        SafetyVerdict::Warn { code, message } => {
-                            on_event(SupervisorEvent::Log {
-                                level: EventLevel::Warn,
-                                code: Some(code.clone()),
-                                message: message.clone(),
-                            });
-                            warnings.push(FaultRecord::new(
-                                &code,
-                                "Safety warning during test",
-                                message,
-                            ));
-                        }
-                        SafetyVerdict::Abort { code, message } => {
-                            on_event(SupervisorEvent::Log {
-                                level: EventLevel::Error,
-                                code: Some(code.clone()),
-                                message: format!("SAFETY ABORT: {message}"),
-                            });
-                            safety_abort = Some((code, message));
-                        }
+        if let Some(m) = monitor.as_deref_mut()
+            && Instant::now() >= next_sample
+            && safety_abort.is_none()
+        {
+            next_sample = Instant::now() + Duration::from_millis(m.sample_interval_ms());
+            for v in m.check() {
+                match v {
+                    SafetyVerdict::Ok => {}
+                    SafetyVerdict::Warn { code, message } => {
+                        on_event(SupervisorEvent::Log {
+                            level: EventLevel::Warn,
+                            code: Some(code.clone()),
+                            message: message.clone(),
+                        });
+                        warnings.push(FaultRecord::new(
+                            &code,
+                            "Safety warning during test",
+                            message,
+                        ));
+                    }
+                    SafetyVerdict::Abort { code, message } => {
+                        on_event(SupervisorEvent::Log {
+                            level: EventLevel::Error,
+                            code: Some(code.clone()),
+                            message: format!("SAFETY ABORT: {message}"),
+                        });
+                        safety_abort = Some((code, message));
                     }
                 }
             }
@@ -277,16 +278,16 @@ pub fn run_supervised(
             let _ = stdin.flush();
             cancel_sent = Some(Instant::now());
         }
-        if let Some(t) = cancel_sent {
-            if t.elapsed() > cfg.cancel_grace {
-                kill_tree(&mut child);
-                break Err((
-                    TestStatus::Aborted,
-                    "BE-SYS-003",
-                    "Worker terminated after cancellation grace period",
-                    "forced termination".into(),
-                ));
-            }
+        if let Some(t) = cancel_sent
+            && t.elapsed() > cfg.cancel_grace
+        {
+            kill_tree(&mut child);
+            break Err((
+                TestStatus::Aborted,
+                "BE-SYS-003",
+                "Worker terminated after cancellation grace period",
+                "forced termination".into(),
+            ));
         }
         if Instant::now() > deadline {
             kill_tree(&mut child);

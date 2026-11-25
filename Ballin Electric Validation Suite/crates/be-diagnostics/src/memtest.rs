@@ -101,7 +101,7 @@ fn value(p: Pattern, base: u64, i: usize) -> u64 {
         Pattern::Zeros => 0,
         Pattern::Ones => u64::MAX,
         Pattern::Checkerboard => {
-            if i % 2 == 0 {
+            if i.is_multiple_of(2) {
                 0x5555_5555_5555_5555
             } else {
                 0xAAAA_AAAA_AAAA_AAAA

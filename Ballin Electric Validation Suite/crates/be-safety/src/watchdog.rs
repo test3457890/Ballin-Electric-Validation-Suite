@@ -94,29 +94,29 @@ impl SafetyMonitor for SensorWatchdog {
                 st.max = st.max.max(v);
                 st.sum += v;
                 st.n += 1;
-                if let Some(a) = rule.abort {
-                    if v >= a {
-                        out.push(SafetyVerdict::Abort {
-                            code: "BE-THERM-002".into(),
-                            message: format!(
-                                "{} {} = {v:.1} {} reached abort limit {a}",
-                                s.chip, s.label, s.unit
-                            ),
-                        });
-                        continue;
-                    }
+                if let Some(a) = rule.abort
+                    && v >= a
+                {
+                    out.push(SafetyVerdict::Abort {
+                        code: "BE-THERM-002".into(),
+                        message: format!(
+                            "{} {} = {v:.1} {} reached abort limit {a}",
+                            s.chip, s.label, s.unit
+                        ),
+                    });
+                    continue;
                 }
-                if let Some(b) = rule.abort_below {
-                    if v <= b {
-                        out.push(SafetyVerdict::Abort {
-                            code: "BE-THERM-003".into(),
-                            message: format!(
-                                "{} {} = {v:.0} {} at/below limit {b}",
-                                s.chip, s.label, s.unit
-                            ),
-                        });
-                        continue;
-                    }
+                if let Some(b) = rule.abort_below
+                    && v <= b
+                {
+                    out.push(SafetyVerdict::Abort {
+                        code: "BE-THERM-003".into(),
+                        message: format!(
+                            "{} {} = {v:.0} {} at/below limit {b}",
+                            s.chip, s.label, s.unit
+                        ),
+                    });
+                    continue;
                 }
                 if let Some(w) = rule.warn {
                     let warn = if rule.abort_below.is_some() {

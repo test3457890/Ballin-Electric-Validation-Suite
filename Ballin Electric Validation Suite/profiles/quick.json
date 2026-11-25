@@ -6,6 +6,7 @@
   "description": "Inventory, health reviews and low-impact known-answer checks. Read-only or short bounded workloads only; no stress.",
   "planned_minutes": [5, 15],
   "allow_warnings": false,
+  "release_profile": false,
   "steps": [
     { "test": "BE-T-INV-001", "timeout_s": 60 },
     { "test": "BE-T-SNS-001", "timeout_s": 60 },

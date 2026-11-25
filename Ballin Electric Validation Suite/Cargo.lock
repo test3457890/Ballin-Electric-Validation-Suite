@@ -113,7 +113,16 @@ dependencies = [
 name = "be-gui"
 version = "0.1.0"
 dependencies = [
+ "be-core",
+ "be-diagnostics",
+ "be-engine",
+ "be-platform",
+ "be-reporting",
+ "be-safety",
+ "be-storage",
  "fltk",
+ "libc",
+ "serde_json",
 ]
 
 [[package]]

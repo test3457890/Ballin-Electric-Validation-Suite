@@ -20,6 +20,11 @@ pub struct Profile {
     /// Whether WARNING results satisfy required steps.
     #[serde(default)]
     pub allow_warnings: bool,
+    /// Only profiles designated as release-qualifying (factory acceptance)
+    /// can make a unit eligible for release. Diagnostic and targeted runs
+    /// can never release a unit.
+    #[serde(default)]
+    pub release_profile: bool,
     pub steps: Vec<ProfileStep>,
     #[serde(default)]
     pub manual_checks: Vec<ManualCheckDef>,

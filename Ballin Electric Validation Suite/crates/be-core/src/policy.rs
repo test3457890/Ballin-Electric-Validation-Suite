@@ -102,6 +102,12 @@ pub fn evaluate(
     let mut blockers = Vec::new();
     let mut notes = Vec::new();
     let mut hold = false;
+    if !profile.release_profile {
+        blockers.push(format!(
+            "profile `{}` is a diagnostic profile, not a release-qualifying acceptance profile",
+            profile.id
+        ));
+    }
 
     for step in &profile.steps {
         let key = step.key();
@@ -219,7 +225,7 @@ mod tests {
 
     fn profile() -> Profile {
         Profile::from_json(
-            r#"{"schema":1,"id":"p","version":"1","name":"P",
+            r#"{"schema":1,"id":"p","version":"1","name":"P","release_profile":true,
             "steps":[{"test":"A"},{"test":"B","waivable":true},{"test":"C","required":false}],
             "manual_checks":[{"id":"fin","label":"Finish"},{"id":"pkg","label":"Packaging","required":false}]}"#,
         )
@@ -340,6 +346,16 @@ mod tests {
         f.provenance = Provenance::Fixture;
         let r: HashMap<_, _> = [("A".to_string(), f), res("B", TestStatus::Pass)].into();
         assert!(!evaluate(&profile(), &r, &signed(), &[]).eligible_for_review);
+    }
+
+    #[test]
+    fn diagnostic_profiles_never_release() {
+        let mut p = profile();
+        p.release_profile = false;
+        let r: HashMap<_, _> = [res("A", TestStatus::Pass), res("B", TestStatus::Pass)].into();
+        let e = evaluate(&p, &r, &signed(), &[]);
+        assert!(!e.eligible_for_review);
+        assert_eq!(e.recommended_state, ReleaseState::AwaitingTest);
     }
 
     #[test]

@@ -114,6 +114,9 @@ pub fn ll_kat(p: u32, cancel: &dyn Fn() -> bool) -> Result<Option<()>, String> {
     }
 }
 
+/// One verified work unit: (thread index, round, stop flag) -> LL checks done.
+type RoundFn<'a> = dyn Fn(usize, u64, &dyn Fn() -> bool) -> Result<u64, String> + Sync + 'a;
+
 #[derive(Default)]
 struct Shared {
     errors: Mutex<Vec<(usize, String)>>,
@@ -129,7 +132,7 @@ fn run_threads(
     cancel: &AtomicBool,
     stop_on_error: bool,
     shared: &Shared,
-    round: &(dyn Fn(usize, u64, &dyn Fn() -> bool) -> Result<u64, String> + Sync),
+    round: &RoundFn,
     keep_going: &(dyn Fn(u64) -> bool + Sync),
 ) {
     let any_error = AtomicBool::new(false);

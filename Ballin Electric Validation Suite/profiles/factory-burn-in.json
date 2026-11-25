@@ -6,6 +6,7 @@
   "description": "DRAFT factory acceptance sequence for BE-01. Thresholds, durations and manifest values are proposals pending engineering approval. Requires authorization and an approved safety profile.",
   "planned_minutes": [480, 1440],
   "allow_warnings": false,
+  "release_profile": true,
   "steps": [
     { "test": "BE-T-INV-001", "key": "manifest", "timeout_s": 60, "params": { "manifest": { "name": "BE-01 DRAFT", "gpu_count": 2, "min_storage_devices": 1, "min_network_speed_mbps": 10000 } } },
     { "test": "BE-T-SNS-001", "key": "preflight-sensors", "timeout_s": 60, "requires": ["manifest"] },

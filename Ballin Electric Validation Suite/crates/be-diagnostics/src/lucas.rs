@@ -19,7 +19,7 @@ pub fn is_prime_u32(n: u32) -> bool {
     }
     let mut d = 2u32;
     while d * d <= n {
-        if n % d == 0 {
+        if n.is_multiple_of(d) {
             return false;
         }
         d += 1;
@@ -83,7 +83,7 @@ fn square(a: &[u64], out: &mut [u64]) {
 fn bits(x: &[u64], start: usize, count: usize, dst: &mut [u64]) {
     dst.iter_mut().for_each(|d| *d = 0);
     let words = count.div_ceil(64);
-    for w in 0..words {
+    for (w, slot) in dst.iter_mut().enumerate().take(words) {
         let bit = start + w * 64;
         let (wi, off) = (bit / 64, bit % 64);
         let lo = x.get(wi).copied().unwrap_or(0) >> off;
@@ -92,7 +92,7 @@ fn bits(x: &[u64], start: usize, count: usize, dst: &mut [u64]) {
         } else {
             x.get(wi + 1).copied().unwrap_or(0) << (64 - off)
         };
-        dst[w] = lo | hi;
+        *slot = lo | hi;
     }
     let rem = count % 64;
     if rem != 0 {

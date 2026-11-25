@@ -309,21 +309,21 @@ pub fn evaluate_smartctl(dev: &str, v: &Value) -> (TestStatus, Vec<Measurement>,
             let id = a.get("id").and_then(|x| x.as_u64()).unwrap_or(0);
             let raw = a.pointer("/raw/value").and_then(|x| x.as_f64());
             let name = a.get("name").and_then(|x| x.as_str()).unwrap_or("attr");
-            if matches!(id, 5 | 187 | 197 | 198) {
-                if let Some(raw) = raw {
-                    m.push(Measurement::num(format!("{dev} {name}"), raw, ""));
-                    if raw > 0.0 {
-                        f.push(
-                            FaultRecord::new(
-                                "BE-STO-004",
-                                format!("{name} non-zero"),
-                                format!("attribute {id} raw = {raw}"),
-                            )
-                            .on(dev),
-                        );
-                        if status == TestStatus::Pass {
-                            status = TestStatus::Warning;
-                        }
+            if matches!(id, 5 | 187 | 197 | 198)
+                && let Some(raw) = raw
+            {
+                m.push(Measurement::num(format!("{dev} {name}"), raw, ""));
+                if raw > 0.0 {
+                    f.push(
+                        FaultRecord::new(
+                            "BE-STO-004",
+                            format!("{name} non-zero"),
+                            format!("attribute {id} raw = {raw}"),
+                        )
+                        .on(dev),
+                    );
+                    if status == TestStatus::Pass {
+                        status = TestStatus::Warning;
                     }
                 }
             }

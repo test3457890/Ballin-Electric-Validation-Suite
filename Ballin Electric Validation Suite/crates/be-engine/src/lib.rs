@@ -147,6 +147,7 @@ fn worst(results: &[(String, TestResult)]) -> TestStatus {
 }
 
 /// Run a profile end-to-end. Persists to `store` when provided.
+#[allow(clippy::too_many_arguments)]
 pub fn run_profile(
     cfg: &EngineConfig,
     profile: &Profile,
@@ -164,14 +165,13 @@ pub fn run_profile(
     profile
         .validate(&|id| descs.contains_key(id))
         .map_err(|e| e.to_string())?;
-    if let Some(s) = unit_serial {
-        if let Some(st) = store {
-            if st.get_unit(s).map_err(|e| e.to_string())?.is_none() {
-                return Err(format!(
-                    "unit `{s}` is not registered; create the unit record first"
-                ));
-            }
-        }
+    if let Some(s) = unit_serial
+        && let Some(st) = store
+        && st.get_unit(s).map_err(|e| e.to_string())?.is_none()
+    {
+        return Err(format!(
+            "unit `{s}` is not registered; create the unit record first"
+        ));
     }
 
     let emit_log = |store: Option<&Store>,
@@ -430,18 +430,18 @@ pub fn run_profile(
         let mut ev = EventRecord::new(level, msg);
         ev.code = result.first_fault_code().map(String::from);
         emit_log(store, run_id, ev, on_event);
-        if let (Some(st), Some(id)) = (store, run_id) {
-            if let Err(e) = st.insert_result(id, &key, &result) {
-                emit_log(
-                    store,
-                    run_id,
-                    EventRecord::new(
-                        EventLevel::Error,
-                        format!("Could not persist result for {key}: {e}"),
-                    ),
-                    on_event,
-                );
-            }
+        if let (Some(st), Some(id)) = (store, run_id)
+            && let Err(e) = st.insert_result(id, &key, &result)
+        {
+            emit_log(
+                store,
+                run_id,
+                EventRecord::new(
+                    EventLevel::Error,
+                    format!("Could not persist result for {key}: {e}"),
+                ),
+                on_event,
+            );
         }
         on_event(EngineEvent::StepFinished {
             index,

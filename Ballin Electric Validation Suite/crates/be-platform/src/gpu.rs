@@ -86,7 +86,7 @@ pub fn nvml_sensors() -> Vec<SensorReading> {
     {
         use nvml_wrapper::enum_wrappers::device::{Clock, TemperatureSensor};
         let now = UtcMillis::now();
-        return with_nvml(|nvml| {
+        with_nvml(|nvml| {
             let mut out = Vec::new();
             let count = nvml.device_count().unwrap_or(0);
             for i in 0..count {
@@ -143,7 +143,7 @@ pub fn nvml_sensors() -> Vec<SensorReading> {
             }
             out
         })
-        .unwrap_or_default();
+        .unwrap_or_default()
     }
     #[cfg(not(feature = "nvml"))]
     Vec::new()

@@ -70,15 +70,15 @@ pub fn evaluate_gpus(
             status = TestStatus::Warning;
         }
     }
-    if let Some(n) = expected_count {
-        if inv.gpus.len() as u64 != n {
-            r.faults.push(FaultRecord::new(
-                "BE-CFG-001",
-                "GPU count mismatch",
-                format!("{} detected, {n} expected", inv.gpus.len()),
-            ));
-            status = TestStatus::Fail;
-        }
+    if let Some(n) = expected_count
+        && inv.gpus.len() as u64 != n
+    {
+        r.faults.push(FaultRecord::new(
+            "BE-CFG-001",
+            "GPU count mismatch",
+            format!("{} detected, {n} expected", inv.gpus.len()),
+        ));
+        status = TestStatus::Fail;
     }
     r.coverage = "PCI display-class enumeration plus NVML/amdgpu telemetry where available".into();
     status
