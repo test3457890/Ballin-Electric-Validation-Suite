@@ -14,7 +14,6 @@ use be_engine::{EngineConfig, EngineEvent};
 use be_reporting::{Audience, ReportData};
 use be_storage::{Store, Unit};
 use clap::{Parser, Subcommand, ValueEnum};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -719,25 +718,8 @@ fn redact_inventory(inv: &mut Inventory) {
     }
 }
 
-/// Write via temporary file + rename so partial reports are never left behind.
 fn write_atomic(path: &Path, data: &[u8]) -> Result<()> {
-    let dir = path
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or(Path::new("."));
-    std::fs::create_dir_all(dir)?;
-    let tmp = dir.join(format!(
-        ".{}.tmp",
-        path.file_name().and_then(|n| n.to_str()).unwrap_or("out")
-    ));
-    {
-        let mut f =
-            std::fs::File::create(&tmp).with_context(|| format!("creating {}", tmp.display()))?;
-        f.write_all(data)?;
-        f.sync_all()?;
-    }
-    std::fs::rename(&tmp, path)?;
-    Ok(())
+    be_core::fsutil::write_atomic(path, data).with_context(|| format!("writing {}", path.display()))
 }
 
 fn cmd_run(db: &Option<PathBuf>, a: RunArgs) -> Result<i32> {
@@ -746,8 +728,8 @@ fn cmd_run(db: &Option<PathBuf>, a: RunArgs) -> Result<i32> {
     cfg.fixture_mode = a.fixture_mode;
     cfg.auth.high_load = a.authorize_high_load;
     if let Some(sp) = &a.safety_profile {
-        let text =
-            std::fs::read_to_string(sp).with_context(|| format!("reading {}", sp.display()))?;
+        let text = be_core::fsutil::read_limited(sp, be_core::fsutil::MAX_CONFIG_BYTES)
+            .with_context(|| format!("reading {}", sp.display()))?;
         cfg.auth.safety_profile = Some(
             be_safety::HardwareSafetyProfile::from_json(&text)
                 .map_err(|e| invalid(format!("safety profile: {e}")))?,
@@ -903,7 +885,7 @@ fn cmd_unit(db: &Option<PathBuf>, cmd: UnitCmd) -> Result<i32> {
         } => {
             let bom_json = match bom {
                 Some(p) => {
-                    let t = std::fs::read_to_string(&p)?;
+                    let t = be_core::fsutil::read_limited(&p, be_core::fsutil::MAX_CONFIG_BYTES)?;
                     serde_json::from_str::<serde_json::Value>(&t)
                         .map_err(|e| invalid(format!("BOM is not valid JSON: {e}")))?;
                     Some(t)

@@ -18,7 +18,6 @@ use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay};
 use fltk::window::Window;
 use std::cell::RefCell;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -73,20 +72,7 @@ pub fn save_file(title: &str, default_name: &str) -> Option<PathBuf> {
 }
 
 pub fn write_atomic(path: &Path, data: &[u8]) -> std::io::Result<()> {
-    let dir = path
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or(Path::new("."));
-    let tmp = dir.join(format!(
-        ".{}.tmp",
-        path.file_name().and_then(|n| n.to_str()).unwrap_or("out")
-    ));
-    {
-        let mut f = std::fs::File::create(&tmp)?;
-        f.write_all(data)?;
-        f.sync_all()?;
-    }
-    std::fs::rename(tmp, path)
+    be_core::fsutil::write_atomic(path, data)
 }
 
 /// Open a local file with the desktop's default viewer (for printing).
@@ -94,7 +80,11 @@ pub fn open_in_system_viewer(path: &Path) -> bool {
     #[cfg(target_os = "linux")]
     let r = std::process::Command::new("xdg-open").arg(path).spawn();
     #[cfg(windows)]
-    let r = std::process::Command::new("explorer").arg(path).spawn();
+    let r = std::process::Command::new(
+        be_core::fsutil::trusted_tool("explorer").unwrap_or_else(|| "explorer.exe".into()),
+    )
+    .arg(path)
+    .spawn();
     #[cfg(target_os = "macos")]
     let r = std::process::Command::new("open").arg(path).spawn();
     #[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]

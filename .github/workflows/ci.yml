@@ -1,9 +1,20 @@
-# Build and non-stress tests for Linux and Windows.
-# Trigger is manual (workflow_dispatch) until the repository owner enables
-# automatic runs. Physical stress tests are never run in CI.
+# Build, lint and non-stress tests on Linux and Windows (MSVC).
+# Physical stress tests are never run in CI: only fixture tests and a few
+# low-impact known-answer checks execute here.
 name: ci
 on:
+  push:
+    branches: [main, "milestone-*", "feature-*"]
+  pull_request:
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: never
+  WS: Ballin Electric Validation Suite
 jobs:
   build-test:
     strategy:
@@ -11,19 +22,81 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-2022]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     defaults:
       run:
+        shell: bash
         working-directory: Ballin Electric Validation Suite
     steps:
       - uses: actions/checkout@v4
       - name: Linux native dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libfontconfig-dev libpango1.0-dev libcairo2-dev libglu1-mesa-dev
-      - name: Toolchain
-        run: rustup show
+        run: sudo apt-get update && sudo apt-get install -y cmake libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libfontconfig-dev libpango1.0-dev libcairo2-dev libglu1-mesa-dev xvfb mesa-vulkan-drivers libvulkan1
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.0"
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "Ballin Electric Validation Suite -> target"
       - name: Format
-        run: cargo fmt --all -- --check
+        run: cargo fmt --all -- --check 2>&1 | tee fmt.log
       - name: Lint
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: |
+          set -o pipefail
+          cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tee clippy.log
       - name: Test (fixtures and low-impact checks only)
-        run: cargo test --workspace --locked
+        run: |
+          set -o pipefail
+          cargo test --workspace --locked 2>&1 | tee test.log
+      - name: GUI smoke test (Linux, Xvfb)
+        if: runner.os == 'Linux'
+        run: |
+          set -o pipefail
+          xvfb-run -a -s "-screen 0 1320x860x24" timeout 120 target/debug/bevalidate-gui --db "$RUNNER_TEMP/smoke.db" --exit-after 8
+      - name: GUI smoke test (Windows)
+        if: runner.os == 'Windows'
+        run: timeout 120 target/debug/bevalidate-gui.exe --db "$RUNNER_TEMP/smoke.db" --exit-after 8
+      - name: CLI smoke test
+        run: |
+          target/debug/bevalidate --db "$RUNNER_TEMP/cli.db" inventory
+          target/debug/bevalidate --db "$RUNNER_TEMP/cli.db" capabilities
+          set +e
+          target/debug/bevalidate --db "$RUNNER_TEMP/cli.db" run --profile quick --output "$RUNNER_TEMP/quick"
+          code=$?
+          echo "quick profile exit code: $code (0 pass, 1 fail, 2 incomplete; CI runners lack sensors so 2 is expected)"
+          test "$code" -le 2
+      - name: Report failures as annotations
+        if: failure()
+        run: |
+          for f in fmt.log clippy.log test.log; do
+            [ -f "$f" ] || continue
+            grep -E "^(error|warning)(\[|:)|panicked|FAILED|failures:|^Diff in|test result" "$f" | head -40 | while IFS= read -r line; do
+              echo "::error title=$f::${line//%/%25}"
+            done
+          done
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: Ballin Electric Validation Suite
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.0"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-audit
+      - name: Licenses, bans, sources, advisories
+        run: cargo deny check 2>&1 | tee deny.log
+      - name: RustSec audit
+        run: cargo audit 2>&1 | tee audit.log
+      - name: Report failures as annotations
+        if: failure()
+        run: |
+          for f in deny.log audit.log; do
+            [ -f "$f" ] || continue
+            grep -E "^(error|warning)|Crate:|ID:|Title:" "$f" | head -40 | while IFS= read -r line; do echo "::error title=$f::$line"; done
+          done

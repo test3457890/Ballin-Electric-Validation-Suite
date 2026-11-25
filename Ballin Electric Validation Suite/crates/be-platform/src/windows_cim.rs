@@ -244,6 +244,13 @@ pub fn parse_cim(json: &str, provider_name: &str) -> Inventory {
 pub struct WindowsProvider;
 
 #[cfg(windows)]
+impl Default for WindowsProvider {
+    fn default() -> Self {
+        WindowsProvider
+    }
+}
+
+#[cfg(windows)]
 impl WindowsProvider {
     pub fn new() -> Self {
         WindowsProvider
@@ -251,7 +258,9 @@ impl WindowsProvider {
 
     fn run_cim() -> Result<String, String> {
         use std::process::Command;
-        let out = Command::new("powershell.exe")
+        let ps = be_core::fsutil::trusted_tool("powershell")
+            .ok_or("Windows PowerShell not found in System32")?;
+        let out = Command::new(ps)
             .args([
                 "-NoProfile",
                 "-NonInteractive",

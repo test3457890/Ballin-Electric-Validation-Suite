@@ -52,8 +52,11 @@ pub fn builtin_profiles() -> Vec<Profile> {
 pub fn load_profile(name_or_path: &str, fixture_mode: bool) -> Result<Profile, String> {
     let text = match BUILTIN_PROFILES.iter().find(|(id, _)| *id == name_or_path) {
         Some((_, j)) => j.to_string(),
-        None => std::fs::read_to_string(name_or_path)
-            .map_err(|e| format!("cannot read profile `{name_or_path}`: {e}"))?,
+        None => be_core::fsutil::read_limited(
+            std::path::Path::new(name_or_path),
+            be_core::fsutil::MAX_CONFIG_BYTES,
+        )
+        .map_err(|e| format!("cannot read profile `{name_or_path}`: {e}"))?,
     };
     let p = Profile::from_json(&text).map_err(|e| e.to_string())?;
     p.validate(&known_test(fixture_mode))
@@ -697,11 +700,13 @@ pub fn capabilities(platform: &dyn PlatformProvider) -> Vec<Capability> {
         "be-worker",
         Available,
     ));
-    let smartctl = std::process::Command::new("smartctl")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
+    let smartctl = std::process::Command::new(
+        be_core::fsutil::trusted_tool("smartctl").unwrap_or_else(|| "smartctl-not-found".into()),
+    )
+    .arg("--version")
+    .output()
+    .map(|o| o.status.success())
+    .unwrap_or(false);
     c.push(Capability::new(
         "storage.smart",
         "SMART / NVMe health",

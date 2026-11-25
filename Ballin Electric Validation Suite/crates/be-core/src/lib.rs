@@ -8,6 +8,7 @@
 pub mod capability;
 pub mod codes;
 pub mod exit;
+pub mod fsutil;
 pub mod inventory;
 pub mod ipc;
 pub mod model;

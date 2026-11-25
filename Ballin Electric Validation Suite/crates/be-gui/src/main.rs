@@ -2809,7 +2809,8 @@ fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
             ) else {
                 return;
             };
-            let text = match std::fs::read_to_string(&path) {
+            let text = match be_core::fsutil::read_limited(&path, be_core::fsutil::MAX_CONFIG_BYTES)
+            {
                 Ok(t) => t,
                 Err(e) => return dialogs::alert(&format!("Cannot read {}: {e}", path.display())),
             };
@@ -2899,10 +2900,15 @@ fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
                 ),
             };
             if matches!(msg, Msg::Print) {
-                let dir = std::env::temp_dir().join("be-validation-reports");
-                let _ = std::fs::create_dir_all(&dir);
+                let dir = be_core::fsutil::user_data_dir().join("reports");
+                if let Err(e) = be_core::fsutil::private_dir(&dir) {
+                    return dialogs::alert(&format!(
+                        "Cannot create report directory {}: {e}",
+                        dir.display()
+                    ));
+                }
                 let path = dir.join(format!("run-{}-report.html", d.run.id));
-                match std::fs::write(&path, content) {
+                match dialogs::write_atomic(&path, content.as_bytes()) {
                     Ok(()) => {
                         let opened = dialogs::open_in_system_viewer(&path);
                         info(

@@ -223,6 +223,31 @@ impl DiagnosticTest for ScratchIntegrity {
             .p_str("directory")
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir);
+        // Profile-supplied directories must be existing, absolute, real
+        // directories (not symlinks) to avoid writing to unexpected places.
+        let ok = dir.is_absolute()
+            && std::fs::symlink_metadata(&dir)
+                .map(|m| m.is_dir())
+                .unwrap_or(false);
+        if !ok {
+            let d = self.descriptor();
+            let mut r = TestResult::not_executed(
+                &d.id,
+                &d.version,
+                TestStatus::NotRun,
+                format!(
+                    "Scratch directory {} is not an existing absolute directory",
+                    dir.display()
+                ),
+                ctx.provenance,
+            );
+            r.faults.push(FaultRecord::new(
+                "BE-STO-003",
+                "Invalid scratch directory",
+                dir.display().to_string(),
+            ));
+            return r;
+        }
         let mib = ctx.p_u64("size_mib", 128).clamp(1, 16 * 1024);
         Self::run_in(ctx, &dir, mib, &|_| {})
     }
@@ -386,9 +411,11 @@ impl DiagnosticTest for StorageHealth {
             } else {
                 format!("/dev/{dev}")
             };
-            let out = Command::new("smartctl")
-                .args(["-j", "-H", "-A", &path])
-                .output();
+            let Some(tool) = be_core::fsutil::trusted_tool("smartctl") else {
+                r.notes.push("smartctl not found in system directories. Install smartmontools to enable this test.".into());
+                return finish(r, started, TestStatus::Unsupported);
+            };
+            let out = Command::new(tool).args(["-j", "-H", "-A", &path]).output();
             let out = match out {
                 Ok(o) => o,
                 Err(e) => {

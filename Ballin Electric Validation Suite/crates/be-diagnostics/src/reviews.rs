@@ -411,7 +411,9 @@ pub fn evaluate_log_lines(
 pub fn read_kernel_log() -> Result<Vec<String>, String> {
     #[cfg(target_os = "linux")]
     {
-        let out = Command::new("journalctl")
+        let jc = be_core::fsutil::trusted_tool("journalctl")
+            .ok_or("journalctl not found in system directories")?;
+        let out = Command::new(&jc)
             .args(["-k", "-b", "-p", "warning", "-o", "cat", "--no-pager", "-q"])
             .output()
             .map_err(|e| format!("journalctl unavailable: {e}"))?;
@@ -431,7 +433,7 @@ pub fn read_kernel_log() -> Result<Vec<String>, String> {
         if lines.is_empty() {
             // journalctl may succeed but have no kernel messages if the
             // journal is not persistent or kernel logging is not captured.
-            let probe = Command::new("journalctl")
+            let probe = Command::new(&jc)
                 .args(["-k", "-b", "-n", "1", "-o", "cat", "--no-pager", "-q"])
                 .output();
             if probe.map(|o| o.stdout.is_empty()).unwrap_or(true) {
@@ -443,7 +445,9 @@ pub fn read_kernel_log() -> Result<Vec<String>, String> {
     #[cfg(windows)]
     {
         let script = "Get-WinEvent -FilterHashtable @{LogName='System'; Level=1,2,3; StartTime=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime} -MaxEvents 2000 -ErrorAction SilentlyContinue | ForEach-Object { $_.ProviderName + ': ' + ($_.Message -replace '\\s+',' ') }";
-        let out = Command::new("powershell.exe")
+        let ps =
+            be_core::fsutil::trusted_tool("powershell").ok_or("Windows PowerShell not found")?;
+        let out = Command::new(ps)
             .args(["-NoProfile", "-NonInteractive", "-Command", script])
             .output()
             .map_err(|e| format!("PowerShell unavailable: {e}"))?;
