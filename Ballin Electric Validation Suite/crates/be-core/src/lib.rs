@@ -11,6 +11,7 @@ pub mod exit;
 pub mod fsutil;
 pub mod inventory;
 pub mod ipc;
+pub mod isolation;
 pub mod model;
 pub mod policy;
 pub mod profile;

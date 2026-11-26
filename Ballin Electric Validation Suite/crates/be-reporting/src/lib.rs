@@ -35,6 +35,7 @@ pub struct ReportData {
     pub rework_chain: Vec<i64>,
     pub inventory: Option<Inventory>,
     pub completeness: String,
+    pub fault_isolation: be_core::isolation::Analysis,
 }
 
 impl ReportData {
@@ -87,6 +88,7 @@ impl ReportData {
             .as_deref()
             .and_then(|j| serde_json::from_str(j).ok());
         let completeness = completeness(&run, &results);
+        let fault_isolation = be_core::isolation::analyze(&results);
         Ok(ReportData {
             schema: be_core::RESULT_SCHEMA_VERSION,
             generated_utc: UtcMillis::now(),
@@ -102,6 +104,7 @@ impl ReportData {
             rework_chain: chain,
             inventory,
             completeness,
+            fault_isolation,
         })
     }
 }
@@ -497,6 +500,48 @@ th{{background:#E2E5E7}} .pass{{color:#26752A;font-weight:bold}} .fail{{color:#B
             );
         }
         h.push_str("</table>");
+    }
+    let analysis = be_core::isolation::analyze(&d.results);
+    if !analysis.findings.is_empty() {
+        let _ = write!(
+            h,
+            "<h2>Fault isolation (ruleset {})</h2><p class=\"small\">{}</p>",
+            esc(&analysis.ruleset_version),
+            esc(&analysis.caveat)
+        );
+        for f in &analysis.findings {
+            let _ = write!(
+                h,
+                "<h3 style=\"font-size:10.5pt;margin:8px 0 2px 0\">{}{}</h3><table><tr><th style=\"width:28%\">Confirmed observations</th><td>{}</td></tr>",
+                esc(&f.title),
+                if f.hold { " — hold unit" } else { "" },
+                f.observations
+                    .iter()
+                    .map(|o| esc(o))
+                    .collect::<Vec<_>>()
+                    .join("<br>")
+            );
+            let _ = write!(
+                h,
+                "<tr><th>Possible causes (not a diagnosis)</th><td>{}</td></tr>",
+                f.hypotheses
+                    .iter()
+                    .map(|x| format!(
+                        "[{}] {} <span class=\"small\">({})</span>",
+                        x.confidence.label(),
+                        esc(&x.cause),
+                        esc(&x.evidence.join("; "))
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("<br>")
+            );
+            let _ = write!(
+                h,
+                "<tr><th>Next safe tests</th><td class=\"mono\">{}</td></tr><tr><th>Escalation</th><td>{}</td></tr></table>",
+                esc(&f.next_tests.join(", ")),
+                esc(&f.escalation)
+            );
+        }
     }
     h.push_str("<h2>Measurements</h2><table><tr><th>Step</th><th>Measurement</th><th>Value</th><th>Quality</th></tr>");
     for (k, r) in &d.results {

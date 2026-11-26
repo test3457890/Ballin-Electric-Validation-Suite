@@ -49,6 +49,7 @@ pub enum Msg {
     InventoryDone(Box<Inventory>, Vec<Capability>),
     RunProfile,
     RunTargeted,
+    RunFollowUp,
     Stop,
     Engine(EngineEvent),
     EngineEnded(Option<String>),
@@ -118,6 +119,7 @@ struct State {
     last_run_id: Option<i64>,
     last_profile: String,
     evaluation: Option<ReleaseEvaluation>,
+    analysis: Option<be_core::isolation::Analysis>,
     events: Vec<EventRecord>,
     log_min: EventLevel,
     log_test_filter: Option<String>,
@@ -361,6 +363,12 @@ fn build_ui(s: &Sender<Msg>, th: &Theme, fixture: bool) -> Ui {
         "&Diagnostics/Run &Selected Test Only (Targeted)",
         Shortcut::Ctrl | 't',
         Msg::RunTargeted,
+    );
+    m(
+        &mut menu,
+        "&Diagnostics/Run &Follow-up Sequence (from fault isolation)",
+        Shortcut::None,
+        Msg::RunFollowUp,
     );
     m(
         &mut menu,
@@ -1698,6 +1706,46 @@ fn update_detail(ui: &mut Ui, st: &State) {
     update_controls(ui, st);
 }
 
+fn analysis_text(a: &be_core::isolation::Analysis) -> String {
+    if a.findings.is_empty() {
+        return format!(
+            "Fault isolation (ruleset {}): no correlated faults in the last run.",
+            a.ruleset_version
+        );
+    }
+    let mut t = format!(
+        "FAULT ISOLATION (ruleset {}). {}\n",
+        a.ruleset_version, a.caveat
+    );
+    for f in &a.findings {
+        t.push_str(&format!(
+            "\n{}{}\n",
+            f.title,
+            if f.hold { "  [HOLD UNIT]" } else { "" }
+        ));
+        for o in f.observations.iter().take(4) {
+            t.push_str(&format!("  observed: {o}\n"));
+        }
+        for h in &f.hypotheses {
+            t.push_str(&format!(
+                "  possible cause [{}]: {}\n",
+                h.confidence.label(),
+                h.cause
+            ));
+        }
+        t.push_str(&format!(
+            "  next safe tests: {}\n  escalation: {}\n",
+            f.next_tests.join(", "),
+            f.escalation
+        ));
+    }
+    t.push_str(&format!(
+        "\nFollow-up sequence: {}  (Diagnostics > Run Follow-up Sequence)\n",
+        a.follow_up.join(" -> ")
+    ));
+    t
+}
+
 fn fill_faults(ui: &mut Ui, st: &State) {
     let mut rows = Vec::new();
     for (i, r) in st.results.iter().enumerate() {
@@ -2594,6 +2642,30 @@ fn handle_engine(ui: &mut Ui, st: &mut State, e: EngineEvent) {
         } => {
             st.evaluation = evaluation;
             let _ = overall;
+            let keyed: Vec<(String, TestResult)> = st
+                .steps
+                .iter()
+                .zip(&st.results)
+                .filter_map(|(s, r)| r.clone().map(|r| (s.key.clone(), r)))
+                .collect();
+            let a = be_core::isolation::analyze(&keyed);
+            ui.fault_detail.set_text(&analysis_text(&a));
+            if !a.findings.is_empty() {
+                add_event(
+                    ui,
+                    st,
+                    EventRecord::new(
+                        EventLevel::Warn,
+                        format!(
+                            "Fault isolation: {} finding(s); see Errors tab. Follow-up available: Diagnostics > Run Follow-up Sequence ({}).",
+                            a.findings.len(),
+                            a.follow_up.join(", ")
+                        ),
+                    ),
+                    true,
+                );
+            }
+            st.analysis = Some(a);
         }
     }
     update_progress(ui, st);
@@ -2721,6 +2793,35 @@ fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
             let p = st.profiles[st.profile_idx].clone();
             let unit = st.run_unit.clone();
             start_run(ui, st, s, p, unit);
+        }
+        Msg::RunFollowUp => {
+            let Some(a) = st.analysis.clone() else {
+                return dialogs::alert("No fault isolation result yet. Run a profile first.");
+            };
+            let descs = be_diagnostics::descriptors(st.fixture_mode);
+            let high = |t: &str| descs.iter().any(|d| d.id == t && d.load == LoadClass::High);
+            let Some(p) = be_core::isolation::follow_up_profile(&a, &high, st.last_run_id) else {
+                return dialogs::message(
+                    "Fault isolation suggests no follow-up tests for the last run.",
+                );
+            };
+            let msg = format!(
+                "Run the automatic follow-up sequence?\n\n{}\n\nThis is a diagnostic run only; it never qualifies a unit for release.",
+                p.steps
+                    .iter()
+                    .map(|s| s.test.clone())
+                    .collect::<Vec<_>>()
+                    .join(" -> ")
+            );
+            if dialogs::confirm(&msg, "Run follow-up", "Cancel") == Some(0) {
+                info(
+                    ui,
+                    st,
+                    EventLevel::Info,
+                    format!("Follow-up sequence started: {}", p.description),
+                );
+                start_run(ui, st, s, p, None);
+            }
         }
         Msg::RunTargeted => {
             let Some(i) = st.selected_step else { return };
@@ -3504,6 +3605,7 @@ fn main() {
         last_run_id: None,
         last_profile: String::new(),
         evaluation: None,
+        analysis: None,
         events: vec![],
         log_min: EventLevel::Debug,
         log_test_filter: None,

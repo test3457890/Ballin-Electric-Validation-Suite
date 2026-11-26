@@ -154,6 +154,25 @@ enum Cmd {
         #[command(subcommand)]
         cmd: BaselineCmd,
     },
+    /// Fault isolation: correlate a stored run's results into observations, hypotheses and next tests
+    Analyze {
+        #[arg(long)]
+        run_id: i64,
+        #[arg(long, value_enum, default_value = "text")]
+        format: Format,
+    },
+    /// Automatic follow-up sequence for a stored run (diagnostic only; never release-qualifying)
+    FollowUp {
+        #[arg(long)]
+        run_id: i64,
+        /// Execute the follow-up sequence now (otherwise print the generated profile)
+        #[arg(long)]
+        execute: bool,
+        #[arg(long, default_value = "local-operator")]
+        operator: String,
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
     /// Fault-code catalog
     Faults {
         #[arg(long, value_enum, default_value = "text")]
@@ -638,6 +657,70 @@ fn dispatch(cli: Cli) -> Result<i32> {
             Ok(exit::PASS)
         }
         Cmd::Baseline { cmd } => cmd_baseline(&db, cmd),
+        Cmd::Analyze { run_id, format } => {
+            let s = store(&db)?;
+            let results = s.results_for_run(run_id)?;
+            if results.is_empty() {
+                return Err(invalid(format!("run {run_id} has no results")));
+            }
+            let a = be_core::isolation::analyze(&results);
+            match format {
+                Format::Json => println!("{}", serde_json::to_string_pretty(&a)?),
+                Format::Text => print_analysis(&a, &results),
+            }
+            Ok(exit::PASS)
+        }
+        Cmd::FollowUp {
+            run_id,
+            execute,
+            operator,
+            output,
+        } => {
+            let s = store(&db)?;
+            let run = s
+                .get_run(run_id)?
+                .ok_or_else(|| invalid(format!("run {run_id} not found")))?;
+            let results = s.results_for_run(run_id)?;
+            let a = be_core::isolation::analyze(&results);
+            let descs = be_diagnostics::descriptors(false);
+            let high = |t: &str| {
+                descs
+                    .iter()
+                    .any(|d| d.id == t && d.load == be_core::model::LoadClass::High)
+            };
+            let Some(p) = be_core::isolation::follow_up_profile(&a, &high, Some(run_id)) else {
+                println!("No follow-up tests suggested for run {run_id}.");
+                return Ok(exit::PASS);
+            };
+            if !execute {
+                println!("{}", serde_json::to_string_pretty(&p)?);
+                eprintln!(
+                    "Re-run with --execute to run this diagnostic sequence (results are linked to run {run_id})."
+                );
+                return Ok(exit::PASS);
+            }
+            let tmp = std::env::temp_dir()
+                .join(format!("be-followup-{}-{run_id}.json", std::process::id()));
+            be_core::fsutil::write_atomic(&tmp, serde_json::to_string_pretty(&p)?.as_bytes())?;
+            let args = RunArgs {
+                profile: tmp.to_string_lossy().into_owned(),
+                unit: run.unit_serial.clone(),
+                rework_of: if run.unit_serial.is_some() {
+                    Some(run_id)
+                } else {
+                    None
+                },
+                output,
+                operator,
+                authorize_high_load: false,
+                safety_profile: None,
+                fixture_mode: run.fixture,
+                no_db: false,
+            };
+            let r = cmd_run(&db, args);
+            let _ = std::fs::remove_file(&tmp);
+            r
+        }
         Cmd::Faults { format } => {
             match format {
                 Format::Json => println!(
@@ -1132,6 +1215,49 @@ fn compare_inventory(a: &Inventory, b: &Inventory) -> Vec<String> {
         d.push("PCI device list changed".into());
     }
     d
+}
+
+fn print_analysis(
+    a: &be_core::isolation::Analysis,
+    results: &[(String, be_core::model::TestResult)],
+) {
+    println!(
+        "Fault isolation (ruleset {}), {} result(s) analysed",
+        a.ruleset_version,
+        results.len()
+    );
+    if !be_core::isolation::live_only(results) {
+        println!("NOTE: run contains FIXTURE results; findings are for software testing only.");
+    }
+    if a.findings.is_empty() {
+        println!("No correlated faults found.");
+        return;
+    }
+    for f in &a.findings {
+        println!(
+            "\n[{}] {}{}",
+            f.rule,
+            f.title,
+            if f.hold { "  (hold unit)" } else { "" }
+        );
+        println!("  Confirmed observations:");
+        for o in &f.observations {
+            println!("    - {o}");
+        }
+        println!("  Possible causes (not a diagnosis):");
+        for h in &f.hypotheses {
+            println!(
+                "    - [{}] {}  (evidence: {})",
+                h.confidence.label(),
+                h.cause,
+                h.evidence.join("; ")
+            );
+        }
+        println!("  Next safe tests: {}", f.next_tests.join(", "));
+        println!("  Escalation: {}", f.escalation);
+    }
+    println!("\nFollow-up sequence: {}", a.follow_up.join(" -> "));
+    println!("{}", a.caveat);
 }
 
 fn print_inventory(inv: &Inventory) {

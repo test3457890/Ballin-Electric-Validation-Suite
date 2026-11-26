@@ -2,9 +2,9 @@
 //! cancellation, safety-monitor aborts and process-tree termination.
 //!
 //! Linux: the worker runs in its own process group, killed with SIGKILL as a
-//! group on abort; the worker also sets PR_SET_PDEATHSIG. Windows: the child
-//! is killed directly; Job Object containment of grandchildren is planned
-//! (current workers spawn no children).
+//! group on abort; the worker also sets PR_SET_PDEATHSIG. Windows: the worker
+//! is assigned to a kill-on-close Job Object, so it and any child processes
+//! end when the job is terminated or the supervisor exits.
 
 use crate::watchdog::{SafetyMonitor, SafetyVerdict};
 use be_core::ipc::{MAX_LINE_BYTES, PROTOCOL_VERSION, WorkerMessage, WorkerRequest};
@@ -82,15 +82,45 @@ pub fn default_worker_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(name))
 }
 
-fn kill_tree(child: &mut Child) {
+/// Per-worker process-tree containment: a process group on Unix (created
+/// at spawn), a kill-on-close Job Object on Windows.
+pub struct Containment {
+    #[cfg(windows)]
+    job: Option<crate::winjob::Job>,
+}
+
+impl Containment {
+    fn attach(child: &Child) -> (Containment, Option<String>) {
+        #[cfg(windows)]
+        {
+            match crate::winjob::Job::contain(child) {
+                Ok(j) => (Containment { job: Some(j) }, None),
+                Err(e) => (Containment { job: None }, Some(format!("Job Object containment unavailable: {e}"))),
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = child;
+            (Containment {}, None)
+        }
+    }
+}
+
+fn kill_tree(child: &mut Child, containment: &Containment) {
     #[cfg(unix)]
     {
+        let _ = containment;
         let pgid = child.id() as i32;
         // SAFETY: sends SIGKILL to the worker's own process group (created
-        // with process_group(0) at spawn, so pgid == worker pid).
+        // with process_group(0) at spawn, so pgid == worker pid). The child
+        // has not been reaped, so its pid cannot have been reused.
         unsafe {
             libc::kill(-pgid, libc::SIGKILL);
         }
+    }
+    #[cfg(windows)]
+    if let Some(j) = &containment.job {
+        j.terminate();
     }
     let _ = child.kill();
     let _ = child.wait();
@@ -165,6 +195,10 @@ pub fn run_supervised(
             );
         }
     };
+    let (containment, containment_warning) = Containment::attach(&child);
+    if let Some(w) = containment_warning {
+        on_event(SupervisorEvent::Log { level: EventLevel::Warn, code: None, message: w });
+    }
     on_event(SupervisorEvent::Started { pid: child.id() });
     let mut stdin = child.stdin.take().expect("piped");
     let req = WorkerRequest {
@@ -181,7 +215,7 @@ pub fn run_supervised(
         .and_then(|_| stdin.flush())
         .is_err()
     {
-        kill_tree(&mut child);
+        kill_tree(&mut child, &containment);
         return failed(
             test_id,
             TestStatus::Aborted,
@@ -281,7 +315,7 @@ pub fn run_supervised(
         if let Some(t) = cancel_sent
             && t.elapsed() > cfg.cancel_grace
         {
-            kill_tree(&mut child);
+            kill_tree(&mut child, &containment);
             break Err((
                 TestStatus::Aborted,
                 "BE-SYS-003",
@@ -290,7 +324,7 @@ pub fn run_supervised(
             ));
         }
         if Instant::now() > deadline {
-            kill_tree(&mut child);
+            kill_tree(&mut child, &containment);
             break Err((
                 TestStatus::Aborted,
                 "BE-SYS-002",
@@ -299,7 +333,7 @@ pub fn run_supervised(
             ));
         }
         if last_msg.elapsed() > cfg.heartbeat_timeout {
-            kill_tree(&mut child);
+            kill_tree(&mut child, &containment);
             break Err((
                 TestStatus::Aborted,
                 "BE-SYS-002",
@@ -322,7 +356,7 @@ pub fn run_supervised(
                 ));
             }
             Ok(Inbound::Bad(e)) => {
-                kill_tree(&mut child);
+                kill_tree(&mut child, &containment);
                 break Err((
                     TestStatus::Inconclusive,
                     "BE-SYS-001",
@@ -334,7 +368,7 @@ pub fn run_supervised(
                 last_msg = Instant::now();
                 match m {
                     WorkerMessage::Hello { protocol, .. } if protocol != PROTOCOL_VERSION => {
-                        kill_tree(&mut child);
+                        kill_tree(&mut child, &containment);
                         break Err((
                             TestStatus::Inconclusive,
                             "BE-SYS-001",
@@ -356,7 +390,7 @@ pub fn run_supervised(
                         message,
                     }),
                     WorkerMessage::Error { message } => {
-                        kill_tree(&mut child);
+                        kill_tree(&mut child, &containment);
                         break Err((
                             TestStatus::NotRun,
                             "BE-SYS-001",
@@ -371,7 +405,7 @@ pub fn run_supervised(
                             match child.try_wait() {
                                 Ok(Some(_)) => break,
                                 _ if t.elapsed() > Duration::from_secs(2) => {
-                                    kill_tree(&mut child);
+                                    kill_tree(&mut child, &containment);
                                     break;
                                 }
                                 _ => std::thread::sleep(Duration::from_millis(10)),

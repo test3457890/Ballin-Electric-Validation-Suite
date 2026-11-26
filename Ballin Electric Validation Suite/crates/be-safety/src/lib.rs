@@ -4,6 +4,8 @@
 pub mod policy;
 pub mod supervisor;
 pub mod watchdog;
+#[cfg(windows)]
+pub mod winjob;
 
 pub use policy::{Authorization, HardwareSafetyProfile, SensorRule};
 pub use supervisor::{SupervisorConfig, SupervisorEvent, run_supervised};
