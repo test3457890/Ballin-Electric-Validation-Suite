@@ -41,4 +41,5 @@ tempfile = "3"
 fltk = "1.5"
 
 [profile.release]
-debug = 1
+# Keep line tables for readable crash backtraces without full debug info.
+debug = "line-tables-only"
