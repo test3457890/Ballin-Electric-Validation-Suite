@@ -359,3 +359,23 @@ fn gpu_tests_run_in_worker_on_available_vulkan_device() {
     );
     assert_eq!(r.status, TestStatus::Pass, "{r:?}");
 }
+
+#[cfg(unix)]
+#[test]
+fn closed_worker_output_does_not_block_the_supervisor() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("worker");
+    std::fs::write(
+        &path,
+        "#!/bin/sh\nread -r request\nexec 1>&-\nexec sleep 8\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut config = cfg(1000);
+    config.worker_path = path;
+    let started = Instant::now();
+    let (result, _) = run(&config, "fixture", json!({}), &AtomicBool::new(false));
+    assert_eq!(result.first_fault_code(), Some("BE-SYS-001"));
+    assert!(started.elapsed() < Duration::from_secs(5));
+}

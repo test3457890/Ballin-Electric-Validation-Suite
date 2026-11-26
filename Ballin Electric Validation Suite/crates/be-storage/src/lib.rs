@@ -281,10 +281,32 @@ fn pid_alive(pid: i64) -> bool {
     {
         Path::new(&format!("/proc/{pid}")).exists()
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::{CloseHandle, ERROR_INVALID_PARAMETER, WAIT_OBJECT_0};
+        use windows_sys::Win32::System::Threading::{
+            OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject,
+        };
+        let Ok(pid) = u32::try_from(pid) else {
+            return false;
+        };
+        // SAFETY: wait on a process handle we own with a zero timeout and close it once.
+        unsafe {
+            let handle = OpenProcess(PROCESS_SYNCHRONIZE, 0, pid);
+            if handle.is_null() {
+                // Access denied or an unknown error does not establish a dead owner.
+                return std::io::Error::last_os_error().raw_os_error()
+                    != Some(ERROR_INVALID_PARAMETER as i32);
+            }
+            let alive = WaitForSingleObject(handle, 0) != WAIT_OBJECT_0;
+            CloseHandle(handle);
+            alive
+        }
+    }
+    #[cfg(not(any(target_os = "linux", windows)))]
     {
         let _ = pid;
-        false
+        true
     }
 }
 
@@ -448,6 +470,20 @@ impl Store {
             ));
         }
         let tx = self.conn.unchecked_transaction()?;
+        if d.state == ReleaseState::Released {
+            let eligible: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM runs WHERE id = ?1 AND unit_serial = ?2
+                 AND state = 'completed' AND fixture = 0
+                 AND NOT EXISTS(SELECT 1 FROM runs WHERE unit_serial = ?2 AND (id > ?1 OR state = 'running')))",
+                params![d.run_id, d.unit_serial], |row| row.get(0),
+            )?;
+            if !eligible {
+                return Err(StoreError::Invalid(
+                    "Release requires the latest completed live run and no active run for the unit"
+                        .into(),
+                ));
+            }
+        }
         let n = tx.execute(
             "UPDATE units SET release_state = ?1 WHERE serial = ?2",
             params![state_str(d.state), d.unit_serial],
@@ -626,12 +662,21 @@ impl Store {
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
-    /// Latest completed (not running) run for a unit.
+    /// Latest run only if completed and no run for the same unit is active.
     pub fn latest_run_for_unit(&self, unit: &str) -> Result<Option<RunRecord>> {
         Ok(self
-            .list_runs(Some(unit), 50)?
-            .into_iter()
-            .find(|r| r.state != "running"))
+            .conn
+            .query_row(
+                &format!(
+                    "SELECT {} FROM runs WHERE unit_serial = ?1 AND state = 'completed'
+                AND id = (SELECT MAX(id) FROM runs WHERE unit_serial = ?1)
+                AND NOT EXISTS(SELECT 1 FROM runs WHERE unit_serial = ?1 AND state = 'running')",
+                    Self::RUN_COLS
+                ),
+                [unit],
+                Self::row_run,
+            )
+            .optional()?)
     }
 
     // ----------------------------------------------------------- results
@@ -966,6 +1011,45 @@ mod tests {
         let live = s.begin_run(&new_run(None, None)).unwrap();
         assert!(s.recover_interrupted().unwrap().is_empty());
         assert_eq!(s.get_run(live).unwrap().unwrap().state, "running");
+    }
+
+    #[test]
+    fn active_or_interrupted_rework_blocks_release_of_an_older_run() {
+        let s = Store::open_in_memory().unwrap();
+        s.create_unit(&unit("U"), "op").unwrap();
+        let first = s.begin_run(&new_run(Some("U"), None)).unwrap();
+        s.finish_run(first, "completed", "PASS").unwrap();
+        assert_eq!(s.latest_run_for_unit("U").unwrap().unwrap().id, first);
+        let next = s.begin_run(&new_run(Some("U"), Some(first))).unwrap();
+        let release = Disposition {
+            unit_serial: "U".into(),
+            run_id: Some(first),
+            state: ReleaseState::Released,
+            actor: "qa".into(),
+            reason: "reviewed".into(),
+            ts: UtcMillis::now(),
+        };
+        assert!(s.latest_run_for_unit("U").unwrap().is_none());
+        assert!(s.record_disposition(&release).is_err());
+        s.finish_run(next, "interrupted", "ABORTED").unwrap();
+        assert!(s.latest_run_for_unit("U").unwrap().is_none());
+        assert!(s.record_disposition(&release).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_identifies_a_live_process_owned_by_another_instance() {
+        use std::process::{Command, Stdio};
+        let mut child = Command::new("cmd.exe")
+            .arg("/D")
+            .arg("/Q")
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let alive = pid_alive(i64::from(child.id()));
+        child.kill().unwrap();
+        child.wait().unwrap();
+        assert!(alive);
     }
 
     #[test]

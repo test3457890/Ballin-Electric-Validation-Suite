@@ -331,6 +331,10 @@ impl EventRecord {
         self.code = Some(code.into());
         self
     }
+    /// Support bundles retain diagnostic metadata and omit free-form event text.
+    pub fn support_metadata(&self) -> serde_json::Value {
+        serde_json::json!({"ts": self.ts, "level": self.level, "code": self.code})
+    }
     pub fn line(&self) -> String {
         match &self.code {
             Some(c) if !self.message.starts_with(c.as_str()) => {

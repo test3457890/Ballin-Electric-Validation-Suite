@@ -62,7 +62,15 @@ impl ReportData {
                     let map = results.iter().cloned().collect();
                     let manual = store.manual_checks(s, Some(run_id)).unwrap_or_default();
                     let waivers = store.waivers(s, run_id).unwrap_or_default();
-                    be_core::policy::evaluate(&p, &map, &manual, &waivers)
+                    let mut evaluation = be_core::policy::evaluate(&p, &map, &manual, &waivers);
+                    if run.fixture || run.state != "completed" {
+                        evaluation.eligible_for_review = false;
+                        evaluation.recommended_state = ReleaseState::Hold;
+                        evaluation
+                            .blockers
+                            .push("Release requires a completed live run".into());
+                    }
+                    evaluation
                 });
                 (
                     store.dispositions(s).unwrap_or_default(),
@@ -120,7 +128,19 @@ fn completeness(run: &RunRecord, results: &[(String, TestResult)]) -> String {
     {
         flags.push("SIMULATED / FIXTURE DATA — NOT VALID FOR RELEASE");
     }
-    if run.state != "completed" {
+    let recorded: std::collections::HashMap<_, _> = results
+        .iter()
+        .map(|(key, r)| (key.as_str(), r.test_id.as_str()))
+        .collect();
+    let complete =
+        serde_json::from_str::<be_core::profile::Profile>(&run.profile_json).is_ok_and(|p| {
+            !p.steps.is_empty()
+                && p.steps.len() == results.len()
+                && p.steps
+                    .iter()
+                    .all(|s| recorded.get(s.key()).copied() == Some(s.test.as_str()))
+        });
+    if run.state != "completed" || !complete {
         flags.push("INCOMPLETE RUN");
     }
     if results.iter().any(|(_, r)| r.status != TestStatus::Pass) {
@@ -148,6 +168,9 @@ fn redact_json(v: &mut serde_json::Value) {
         }
     }
     if let Some(o) = v.as_object_mut() {
+        if let Some(evaluation) = o.get_mut("evaluation").and_then(|e| e.as_object_mut()) {
+            evaluation.remove("notes");
+        }
         o.remove("events");
         o.remove("dispositions");
         if let Some(u) = o.get_mut("unit").and_then(|u| u.as_object_mut()) {
@@ -155,16 +178,18 @@ fn redact_json(v: &mut serde_json::Value) {
             u.remove("order_ref");
             u.remove("bom_json");
         }
-        if let Some(svc) = o.get_mut("service").and_then(|s| s.as_array_mut()) {
-            for s in svc {
-                if let Some(so) = s.as_object_mut() {
-                    so.remove("technician");
-                }
-            }
-        }
+        o.remove("service");
         if let Some(inv) = o.get_mut("inventory").and_then(|i| i.as_object_mut()) {
             if let Some(sys) = inv.get_mut("system").and_then(|s| s.as_object_mut()) {
                 sys.remove("hostname");
+                sys.remove("serial");
+            }
+            if let Some(disks) = inv.get_mut("storage").and_then(|v| v.as_array_mut()) {
+                for disk in disks {
+                    if let Some(fields) = disk.as_object_mut() {
+                        fields.remove("serial");
+                    }
+                }
             }
             if let Some(net) = inv.get_mut("network").and_then(|n| n.as_array_mut()) {
                 for n in net {
@@ -186,7 +211,8 @@ fn redact_json(v: &mut serde_json::Value) {
 
 fn csv_field(s: &str) -> String {
     // Neutralize spreadsheet formula injection and quote.
-    let s = if s.starts_with(['=', '+', '-', '@']) {
+    let s = if s.trim_start().starts_with(['=', '+', '-', '@']) || s.starts_with(['\t', '\r', '\n'])
+    {
         format!("'{s}")
     } else {
         s.to_string()
@@ -719,6 +745,33 @@ mod tests {
         let m = measurements_csv(&d);
         assert!(m.contains("Unavailable"));
         assert_eq!(csv_field("=1+1"), "\"'=1+1\"");
+    }
+
+    #[test]
+    fn missing_recorded_step_marks_a_completed_run_incomplete() {
+        let mut d = data();
+        d.run.profile_json =
+            r#"{"schema":1,"id":"quick","name":"Quick","version":"1","steps":[{"test":"A"}]}"#
+                .into();
+        assert!(completeness(&d.run, &[]).contains("INCOMPLETE RUN"));
+        assert!(completeness(&d.run, &d.results).contains("INCOMPLETE RUN"));
+    }
+
+    #[test]
+    fn customer_json_omits_waiver_notes_and_inventory_serials() {
+        let mut value = serde_json::json!({
+            "evaluation": {"notes": ["reviewer name and reason"], "blockers": ["missing check"]},
+            "inventory": {"system": {"serial": "system123"}, "storage": [{"serial": "disk123", "model": "SSD"}]}
+        });
+        redact_json(&mut value);
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "evaluation": {"blockers": ["missing check"]},
+                "inventory": {"system": {}, "storage": [{"model": "SSD"}]}
+            })
+        );
+        assert_eq!(csv_field("  =1+1"), "\"'  =1+1\"");
     }
 
     #[test]
