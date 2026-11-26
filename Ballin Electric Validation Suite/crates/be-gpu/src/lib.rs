@@ -308,6 +308,8 @@ pub struct GraphicsParams {
 /// `verify_every`-th submission renders the fixed reference frame (t = 0),
 /// reads it back and compares its hash with the first reference frame; any
 /// difference indicates non-deterministic rendering (possible corruption).
+/// The run continues past `duration` until at least two reference frames
+/// have been compared.
 pub fn graphics_load(
     device_index: usize,
     p: GraphicsParams,
@@ -367,7 +369,9 @@ pub fn graphics_load(
             }
             submit_no += 1;
             progress((t0.elapsed().as_secs_f64() / p.duration.as_secs_f64().max(0.001)).min(1.0));
-            if t0.elapsed() >= p.duration {
+            // Always compare at least two reference frames, whatever the
+            // duration, so every run actually verifies rendering.
+            if t0.elapsed() >= p.duration && out.verification_frames >= 2 {
                 break;
             }
         }
