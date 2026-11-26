@@ -1,0 +1,77 @@
+# Build, lint and non-stress tests on Linux and Windows (MSVC).
+# Physical stress tests are never run in CI: only fixture tests and a few
+# low-impact known-answer checks execute here.
+name: ci
+on:
+  push:
+    branches: [main, "milestone-*", "feature-*"]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: never
+  WS: Ballin Electric Validation Suite
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: Ballin Electric Validation Suite
+    steps:
+      - uses: actions/checkout@v5
+      - name: Linux native dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libfontconfig-dev libpango1.0-dev libcairo2-dev libglu1-mesa-dev xvfb xauth mesa-vulkan-drivers libvulkan1
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.0"
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "Ballin Electric Validation Suite -> target"
+      - name: Format
+        run: ../.github/ci/step.sh fmt cargo fmt --all -- --check
+      - name: Lint
+        run: ../.github/ci/step.sh clippy cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test (fixtures and low-impact checks only)
+        run: ../.github/ci/step.sh test cargo test --workspace --locked
+      - name: Build all executables
+        run: ../.github/ci/step.sh build cargo build --workspace --locked
+      - name: GUI smoke test (Linux, Xvfb)
+        if: runner.os == 'Linux'
+        run: ../.github/ci/step.sh gui-smoke xvfb-run -a -s "-screen 0 1320x860x24" timeout 120 target/debug/bevalidate-gui --db "$RUNNER_TEMP/smoke.db" --exit-after 8
+      - name: GUI smoke test (Windows)
+        if: runner.os == 'Windows'
+        run: ../.github/ci/step.sh gui-smoke timeout 120 target/debug/bevalidate-gui.exe --db "$RUNNER_TEMP/smoke.db" --exit-after 8
+      - name: CLI smoke test
+        run: ../.github/ci/step.sh cli-smoke bash ../.github/ci/cli-smoke.sh
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: Ballin Electric Validation Suite
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.0"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-audit
+      - name: Licenses, bans, sources, advisories
+        shell: bash
+        run: ../.github/ci/step.sh deny cargo deny check
+      - name: RustSec audit
+        shell: bash
+        run: ../.github/ci/step.sh audit cargo audit

@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "id": "quick",
+  "version": "1.0.0",
+  "name": "Quick Diagnostics",
+  "description": "Inventory, health reviews and low-impact known-answer checks. Read-only or short bounded workloads only; no stress.",
+  "planned_minutes": [5, 15],
+  "allow_warnings": false,
+  "release_profile": false,
+  "steps": [
+    { "test": "BE-T-INV-001", "timeout_s": 60 },
+    { "test": "BE-T-SNS-001", "timeout_s": 60 },
+    { "test": "BE-T-CPU-001", "timeout_s": 600, "params": { "max_exponent": 2281 } },
+    { "test": "BE-T-MEM-001", "timeout_s": 900, "params": { "size_mib": 256, "passes": 1 } },
+    { "test": "BE-T-STO-001", "timeout_s": 900, "params": { "size_mib": 128 } },
+    { "test": "BE-T-OS-001", "timeout_s": 120 },
+    { "test": "BE-T-STO-002", "timeout_s": 120, "required": false },
+    { "test": "BE-T-PCIE-001", "timeout_s": 60, "required": false },
+    { "test": "BE-T-NET-001", "timeout_s": 60, "required": false },
+    { "test": "BE-T-FW-001", "timeout_s": 60, "required": false },
+    { "test": "BE-T-GPU-001", "timeout_s": 120, "required": false }
+  ],
+  "manual_checks": []
+}

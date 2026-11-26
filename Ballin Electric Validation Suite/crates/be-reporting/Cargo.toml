@@ -1,0 +1,13 @@
+[package]
+name = "be-reporting"
+description = "JSON, CSV and printable HTML reports for BE Validation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+be-core.workspace = true
+be-storage.workspace = true
+serde.workspace = true
+serde_json.workspace = true

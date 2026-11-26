@@ -1,0 +1,20 @@
+[package]
+name = "be-diagnostics"
+description = "Diagnostic test modules (known-answer CPU, memory patterns, storage, reviews) for BE Validation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+be-core.workspace = true
+be-platform.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

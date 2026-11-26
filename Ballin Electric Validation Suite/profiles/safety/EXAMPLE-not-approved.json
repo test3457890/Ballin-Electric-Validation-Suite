@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "example-not-approved",
+  "version": "0.0.1",
+  "description": "EXAMPLE ONLY. Shows the file format. The limits below are placeholders, NOT engineering-approved values for any hardware. `approved` is false, so this profile can never enable high-load tests. Create a device-specific profile from vendor documentation and have it approved by a qualified engineer.",
+  "approved": false,
+  "approved_by": null,
+  "sample_interval_ms": 1000,
+  "max_missed_samples": 3,
+  "cooldown_s": 120,
+  "rules": [
+    { "matches": "tctl", "kind": "temperature", "warn": 0.0, "abort": 0.0, "required": true },
+    { "matches": "package", "kind": "temperature", "warn": 0.0, "abort": 0.0, "required": false },
+    { "matches": "gpu", "kind": "temperature", "warn": 0.0, "abort": 0.0, "required": false }
+  ]
+}

@@ -1,0 +1,27 @@
+# cargo-deny policy (licenses, advisories, sources). Run: cargo deny check
+[graph]
+all-features = true
+
+[licenses]
+confidence-threshold = 0.9
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "ISC",
+    "Zlib",
+    "Unlicense",
+    "Unicode-3.0",
+]
+# Workspace crates are proprietary and unpublished.
+private = { ignore = true }
+
+[advisories]
+yanked = "deny"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

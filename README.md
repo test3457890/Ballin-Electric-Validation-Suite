@@ -6,9 +6,9 @@
 
 Professional hardware diagnostics, stability testing, factory burn-in and manufacturing quality assurance.
 
-[Interface preview](#interface-preview) · [Capabilities](#planned-capabilities) · [Factory workflow](#factory-workflow) · [Development documentation](#development-documentation)
+[Interface preview](#interface-preview) · [Screenshots](#application-screenshots) · [Capabilities](#planned-capabilities) · [Factory workflow](#factory-workflow) · [Development documentation](#development-documentation)
 
-> Development project. This repository contains the product specification and approved interface concept. The proposed capabilities below are development targets, not claims of a released or physically validated application. Consult the development status document for implementation evidence.
+> Development project. This repository contains the product specification, the approved interface concept and an early Rust implementation (engine 0.1.0) that has been tested with fixtures and on a cloud Linux development VM only. The capabilities below are development targets, not claims of a released or physically validated application. Consult the development status document and capability matrix for implementation evidence.
 
 ## Overview
 
@@ -25,6 +25,16 @@ Performance benchmarking is only one part of the system. A passing benchmark doe
 Traditional desktop menus, hardware navigation trees, sortable data tables, tabbed inspection panels and a persistent diagnostic event log. Compact controls and restrained colors take precedence over decorative dashboard layouts.
 
 [Full-size PNG](Ballin%20Electric%20Validation%20Suite/design/assets/Main%20Window%20Reference.png) · [Editable SVG](Ballin%20Electric%20Validation%20Suite/design/assets/Main%20Window%20Reference.svg) · [Visual design language](Ballin%20Electric%20Validation%20Suite/design/Design%20Language.md)
+
+## Application screenshots
+
+Genuine screenshots of the running application. Build: BE Validation 0.1.0 (development). System: Ubuntu 24.04 cloud development VM, virtualized, displayed through Xvfb. Readings are live from that VM, not fixtures. The VM exposes no temperature sensors, GPU, TPM or PCIe link data, so the application correctly reports those items as unavailable or unsupported and blocks release. **Not physical BE-01 hardware.**
+
+| Test results and shipment disposition | Fault details with catalog hypotheses |
+| :-: | :-: |
+| ![Tests tab after a live Quick Diagnostics run](Ballin%20Electric%20Validation%20Suite/docs/screenshots/v0.1.0-linux-devvm-tests.png) | ![Errors tab with fault-code details](Ballin%20Electric%20Validation%20Suite/docs/screenshots/v0.1.0-linux-devvm-errors.png) |
+| **Manufacturing records and disposition history** | **Dark theme, capability registry** |
+| ![Manufacturing tab with unit record and disposition history](Ballin%20Electric%20Validation%20Suite/docs/screenshots/v0.1.0-linux-devvm-mfg.png) | ![Overview tab in the Dark theme with capability states](Ballin%20Electric%20Validation%20Suite/docs/screenshots/v0.1.0-linux-devvm-dark.png) |
 
 ## Planned capabilities
 
@@ -82,4 +92,4 @@ The software is not a replacement for physical inspection, calibrated test equip
 
 ## License and distribution
 
-No project license has been selected. This is a private development project; do not redistribute the repository, its assets or proprietary materials without authorization. Third-party dependencies remain subject to their respective licenses.
+No project license has been selected. The repository is publicly visible, but no rights are granted: all rights reserved. Do not copy, modify or redistribute the source code, assets or proprietary materials without written authorization. Third-party dependencies remain subject to their respective licenses.

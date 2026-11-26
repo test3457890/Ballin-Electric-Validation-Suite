@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "id": "standard",
+  "version": "1.0.0",
+  "name": "Standard Validation",
+  "description": "Broad functional coverage with bounded moderate workloads. GPU compute/VRAM steps are required and remain UNSUPPORTED (blocking) until a GPU backend is implemented.",
+  "planned_minutes": [30, 60],
+  "allow_warnings": false,
+  "release_profile": true,
+  "steps": [
+    { "test": "BE-T-INV-001", "timeout_s": 60 },
+    { "test": "BE-T-SNS-001", "timeout_s": 60 },
+    { "test": "BE-T-FW-001", "timeout_s": 60 },
+    { "test": "BE-T-OS-001", "timeout_s": 120 },
+    { "test": "BE-T-STO-002", "timeout_s": 120 },
+    { "test": "BE-T-CPU-001", "timeout_s": 900, "params": { "max_exponent": 4423 } },
+    { "test": "BE-T-MEM-001", "timeout_s": 3600, "params": { "size_mib": 2048, "passes": 2 } },
+    { "test": "BE-T-STO-001", "timeout_s": 1800, "params": { "size_mib": 2048 } },
+    { "test": "BE-T-PCIE-001", "timeout_s": 60 },
+    { "test": "BE-T-NET-001", "timeout_s": 60 },
+    { "test": "BE-T-GPU-001", "timeout_s": 120 },
+    { "test": "BE-T-GPU-002", "timeout_s": 1800, "requires": ["BE-T-GPU-001"] },
+    { "test": "BE-T-GPU-003", "timeout_s": 1800, "requires": ["BE-T-GPU-001"] }
+  ],
+  "manual_checks": []
+}
