@@ -62,7 +62,15 @@ impl ReportData {
                     let map = results.iter().cloned().collect();
                     let manual = store.manual_checks(s, Some(run_id)).unwrap_or_default();
                     let waivers = store.waivers(s, run_id).unwrap_or_default();
-                    be_core::policy::evaluate(&p, &map, &manual, &waivers)
+                    let mut evaluation = be_core::policy::evaluate(&p, &map, &manual, &waivers);
+                    if run.fixture || run.state != "completed" {
+                        evaluation.eligible_for_review = false;
+                        evaluation.recommended_state = ReleaseState::Hold;
+                        evaluation
+                            .blockers
+                            .push("Release requires a completed live run".into());
+                    }
+                    evaluation
                 });
                 (
                     store.dispositions(s).unwrap_or_default(),
@@ -120,7 +128,19 @@ fn completeness(run: &RunRecord, results: &[(String, TestResult)]) -> String {
     {
         flags.push("SIMULATED / FIXTURE DATA — NOT VALID FOR RELEASE");
     }
-    if run.state != "completed" {
+    let recorded: std::collections::HashMap<_, _> = results
+        .iter()
+        .map(|(key, r)| (key.as_str(), r.test_id.as_str()))
+        .collect();
+    let complete =
+        serde_json::from_str::<be_core::profile::Profile>(&run.profile_json).is_ok_and(|p| {
+            !p.steps.is_empty()
+                && p.steps.len() == results.len()
+                && p.steps
+                    .iter()
+                    .all(|s| recorded.get(s.key()).copied() == Some(s.test.as_str()))
+        });
+    if run.state != "completed" || !complete {
         flags.push("INCOMPLETE RUN");
     }
     if results.iter().any(|(_, r)| r.status != TestStatus::Pass) {

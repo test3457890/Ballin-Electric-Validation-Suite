@@ -436,15 +436,10 @@ pub fn run_profile(
         if let (Some(st), Some(id)) = (store, run_id)
             && let Err(e) = st.insert_result(id, &key, &result)
         {
-            emit_log(
-                store,
-                run_id,
-                EventRecord::new(
-                    EventLevel::Error,
-                    format!("Could not persist result for {key}: {e}"),
-                ),
-                on_event,
-            );
+            st.finish_run(id, "interrupted", "ABORTED").map_err(|end| {
+                format!("Could not persist result for {key}: {e}; closing run {id}: {end}")
+            })?;
+            return Err(format!("Could not persist result for {key}: {e}"));
         }
         on_event(EngineEvent::StepFinished {
             index,
@@ -457,11 +452,12 @@ pub fn run_profile(
     let stopped = cancel.load(Ordering::SeqCst);
     let mut evaluation = None;
     if let (Some(st), Some(id)) = (store, run_id) {
-        let _ = st.finish_run(
+        st.finish_run(
             id,
             if stopped { "aborted" } else { "completed" },
             overall.label(),
-        );
+        )
+        .map_err(|e| format!("Could not finalize run {id}: {e}"))?;
         if let Some(serial) = unit_serial {
             let manual = st.manual_checks(serial, Some(id)).unwrap_or_default();
             let waivers = st.waivers(serial, id).unwrap_or_default();
@@ -881,10 +877,8 @@ pub fn capabilities(platform: &dyn PlatformProvider) -> Vec<Capability> {
         "reports.pdf",
         "Native PDF reports",
         "Reports",
-        "-",
-        Planned(
-            "Use HTML report and print to PDF; native PDF pending library license review".into(),
-        ),
+        "built-in PDF writer",
+        Available,
     ));
     c.push(Capability::new(
         "preboot",
