@@ -95,7 +95,10 @@ impl Containment {
         {
             match crate::winjob::Job::contain(child) {
                 Ok(j) => (Containment { job: Some(j) }, None),
-                Err(e) => (Containment { job: None }, Some(format!("Job Object containment unavailable: {e}"))),
+                Err(e) => (
+                    Containment { job: None },
+                    Some(format!("Job Object containment unavailable: {e}")),
+                ),
             }
         }
         #[cfg(not(windows))]
@@ -197,7 +200,11 @@ pub fn run_supervised(
     };
     let (containment, containment_warning) = Containment::attach(&child);
     if let Some(w) = containment_warning {
-        on_event(SupervisorEvent::Log { level: EventLevel::Warn, code: None, message: w });
+        on_event(SupervisorEvent::Log {
+            level: EventLevel::Warn,
+            code: None,
+            message: w,
+        });
     }
     on_event(SupervisorEvent::Started { pid: child.id() });
     let mut stdin = child.stdin.take().expect("piped");

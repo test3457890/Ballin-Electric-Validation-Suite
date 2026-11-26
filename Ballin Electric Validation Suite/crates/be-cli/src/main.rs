@@ -218,7 +218,7 @@ struct RunArgs {
     /// Link this run as rework of an earlier run
     #[arg(long)]
     rework_of: Option<i64>,
-    /// Directory for report.html, report.json, results.csv, measurements.csv
+    /// Directory for report.html, report.pdf, report.json, results.csv, measurements.csv
     #[arg(long)]
     output: Option<PathBuf>,
     #[arg(long, default_value = "local-operator")]
@@ -507,10 +507,15 @@ fn dispatch(cli: Cli) -> Result<i32> {
                 ReportFormat::Csv => be_reporting::results_csv(&d),
                 ReportFormat::Html => be_reporting::to_html(&d, aud),
                 ReportFormat::Pdf => {
-                    eprintln!(
-                        "PDF output is not implemented (native PDF library pending license review). Generate HTML and print to PDF."
-                    );
-                    return Ok(exit::INCOMPLETE);
+                    let bytes = be_reporting::pdf::to_pdf(&d, aud);
+                    match out {
+                        Some(p) => write_atomic(&p, &bytes)?,
+                        None => {
+                            use std::io::Write as _;
+                            std::io::stdout().write_all(&bytes)?;
+                        }
+                    }
+                    return Ok(exit::PASS);
                 }
             };
             match out {
@@ -907,6 +912,10 @@ fn cmd_run(db: &Option<PathBuf>, a: RunArgs) -> Result<i32> {
         write_atomic(
             &dir.join("measurements.csv"),
             be_reporting::measurements_csv(&d).as_bytes(),
+        )?;
+        write_atomic(
+            &dir.join("report.pdf"),
+            &be_reporting::pdf::to_pdf(&d, Audience::Internal),
         )?;
         println!("Reports written to {} (run {id})", dir.display());
     } else if a.output.is_some() {

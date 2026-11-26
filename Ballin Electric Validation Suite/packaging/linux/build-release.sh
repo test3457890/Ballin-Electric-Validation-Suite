@@ -51,6 +51,10 @@ Description: BE Validation hardware diagnostics (DEVELOPMENT BUILD, unsigned)
  Ballin Electric System Validation Suite development build. Not for
  production use. No license is granted; all rights reserved.
 CTRL
-dpkg-deb --root-owner-group --build "$PKG" "dist/be-validation_${DEBVER}_amd64.deb" >/dev/null
-(cd dist && sha256sum "be-validation_${DEBVER}_amd64.deb" > "be-validation_${DEBVER}_amd64.deb.sha256")
-echo "Built dist/$NAME.tar.gz and dist/be-validation_${DEBVER}_amd64.deb (UNSIGNED development builds)"
+# File name without '~' (GitHub release assets rename it, breaking checksums);
+# the package version inside keeps Debian pre-release ordering.
+DEBFILE="be-validation_${VERSION}-${LABEL#v$VERSION-}_amd64.deb"
+DEBFILE="${DEBFILE/_-/_}"
+dpkg-deb --root-owner-group --build "$PKG" "dist/$DEBFILE" >/dev/null
+(cd dist && sha256sum "$DEBFILE" > "$DEBFILE.sha256")
+echo "Built dist/$NAME.tar.gz and dist/$DEBFILE (UNSIGNED development builds)"

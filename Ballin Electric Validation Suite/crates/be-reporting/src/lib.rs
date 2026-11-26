@@ -1,6 +1,8 @@
 //! Report generation. A generated report is never evidence that tests
 //! passed: every report states completeness, provenance and disposition.
 
+pub mod pdf;
+
 use be_core::codes;
 use be_core::inventory::{Inventory, format_bytes};
 use be_core::model::{DataQuality, EventRecord, Provenance, TestResult};
