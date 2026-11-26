@@ -756,26 +756,66 @@ pub fn capabilities(platform: &dyn PlatformProvider) -> Vec<Capability> {
             Err(e) => Unsupported(e),
         },
     ));
+    let vk = be_gpu::enumerate();
+    let vk_state = match &vk {
+        Ok(d) if d.iter().any(|x| !x.software) => Available,
+        Ok(d) if !d.is_empty() => Unsupported(format!(
+            "only software Vulkan devices present ({}); GPU hardware cannot be tested",
+            d.iter()
+                .map(|x| x.name.clone())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+        Ok(_) => Unsupported("Vulkan loaded but no devices found".into()),
+        Err(e) => Unsupported(e.to_string()),
+    };
+    c.push(Capability::new(
+        "gpu.vulkan",
+        "Vulkan GPU backend",
+        "Graphics",
+        "ash (runtime-loaded Vulkan loader)",
+        vk_state.clone(),
+    ));
     c.push(Capability::new(
         "gpu.compute",
         "GPU compute verification",
-        "Stress Tests",
-        "Vulkan/CUDA/HIP",
-        Planned("No GPU compute backend implemented (Milestone 3)".into()),
+        "Diagnostics",
+        "Vulkan compute",
+        vk_state.clone(),
     ));
     c.push(Capability::new(
         "gpu.vram",
         "VRAM pattern test",
-        "Stress Tests",
-        "Vulkan/CUDA/HIP",
-        Planned("No GPU memory backend implemented (Milestone 3)".into()),
+        "Diagnostics",
+        "Vulkan compute",
+        vk_state.clone(),
     ));
     c.push(Capability::new(
         "gpu.graphics",
-        "Graphics stress (FurMark-style)",
+        "GPU graphics stress (FurMark-inspired)",
         "Stress Tests",
-        "Vulkan",
-        Planned("No graphics backend implemented (Milestone 3)".into()),
+        "Vulkan graphics",
+        if vk_state.is_usable() {
+            Blocked(
+                "requires operator authorization and an approved hardware safety profile".into(),
+            )
+        } else {
+            vk_state.clone()
+        },
+    ));
+    c.push(Capability::new(
+        "gpu.cuda",
+        "CUDA backend",
+        "Graphics",
+        "-",
+        Planned("Backend-neutral API ready; CUDA adapter not implemented".into()),
+    ));
+    c.push(Capability::new(
+        "gpu.hip",
+        "HIP/ROCm backend",
+        "Graphics",
+        "-",
+        Planned("Backend-neutral API ready; HIP adapter not implemented".into()),
     ));
     c.push(Capability::new(
         "stress.cpu",

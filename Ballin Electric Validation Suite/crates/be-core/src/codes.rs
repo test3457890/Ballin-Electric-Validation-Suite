@@ -192,6 +192,73 @@ pub static CATALOG: &[FaultCode] = &[
         ]
     ),
     fc!(
+        "BE-GPU-002",
+        Info,
+        "Only software Vulkan devices present",
+        "The only Vulkan devices are CPU-emulated (e.g. Mesa llvmpipe); GPU hardware was not tested.",
+        [
+            "GPU driver without Vulkan support",
+            "Virtual machine",
+            "No GPU installed"
+        ],
+        [
+            "Install the GPU vendor driver with Vulkan support",
+            "Confirm the GPU is detected by the OS"
+        ]
+    ),
+    fc!(
+        "BE-GPU-010",
+        Error,
+        "GPU compute result mismatch",
+        "A deterministic compute kernel produced results different from the CPU reference.",
+        [
+            "GPU core instability",
+            "VRAM error",
+            "Driver defect",
+            "Unstable power delivery or overclock",
+            "Thermal issue"
+        ],
+        [
+            "Repeat the compute test on the same GPU",
+            "Run the VRAM pattern test",
+            "Check driver version and stock clocks",
+            "Compare with a known-good GPU in the same slot"
+        ]
+    ),
+    fc!(
+        "BE-GPU-011",
+        Error,
+        "GPU device lost or hung",
+        "The driver reported device loss, or GPU work did not complete in time.",
+        [
+            "Driver reset (TDR) or crash",
+            "PCIe link/riser fault",
+            "Insufficient or unstable power",
+            "GPU hardware fault",
+            "Overheating"
+        ],
+        [
+            "Review system log for driver resets",
+            "Inspect riser, seating and PCIe power connectors with power removed",
+            "Repeat with the GPU isolated in another slot"
+        ]
+    ),
+    fc!(
+        "BE-GPU-012",
+        Warning,
+        "GPU memory coverage reduced",
+        "The requested VRAM allocation could not be obtained; coverage was reduced.",
+        [
+            "Other processes using VRAM",
+            "Driver allocation limits",
+            "50% heap safety cap"
+        ],
+        [
+            "Close other GPU applications",
+            "Repeat with a smaller request and document coverage"
+        ]
+    ),
+    fc!(
         "BE-GPU-014",
         Error,
         "GPU memory mismatch",
@@ -250,6 +317,56 @@ pub static CATALOG: &[FaultCode] = &[
             "Note the reporting device",
             "Repeat after reseat",
             "Escalate if uncorrectable errors present"
+        ]
+    ),
+    fc!(
+        "BE-GPU-021",
+        Warning,
+        "GPU clock throttling observed",
+        "The driver reported active clock-throttle reasons (thermal, power or hardware slowdown) during the test.",
+        [
+            "Cooling insufficient or obstructed",
+            "Power limit reached",
+            "Hardware slowdown signal (PSU/board)",
+            "Ambient temperature"
+        ],
+        [
+            "Review thermal trend and fan operation",
+            "Inspect GPU airflow and thermal interface",
+            "Compare against approved power envelope"
+        ]
+    ),
+    fc!(
+        "BE-GPU-030",
+        Error,
+        "GPU rendering inconsistency",
+        "Re-rendering an identical reference frame produced different pixels.",
+        [
+            "GPU core or VRAM instability",
+            "Driver defect",
+            "Overheating",
+            "Power instability"
+        ],
+        [
+            "Repeat the graphics test",
+            "Run compute and VRAM tests",
+            "Check temperatures and throttling during load"
+        ]
+    ),
+    fc!(
+        "BE-PCIE-004",
+        Warning,
+        "PCIe replay counter increased",
+        "Link-level retransmissions (replays) increased during the test, indicating signal-integrity errors that were corrected.",
+        [
+            "Riser or cable signal integrity",
+            "Slot contact",
+            "Link speed beyond channel capability"
+        ],
+        [
+            "Inspect and reseat the riser and GPU with power removed",
+            "Repeat under load",
+            "Compare against a known-good riser"
         ]
     ),
     fc!(

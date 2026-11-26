@@ -59,6 +59,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2cb931c189b85683d69a5cfad41d4d418671e1ac413dd209f3f2fc31e3cfd902"
 
 [[package]]
+name = "ash"
+version = "0.38.0+1.3.281"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bb44936d800fea8f016d7f2311c6a4f97aebd5dc86f09906139ec848cf3a46f"
+dependencies = [
+ "libloading",
+]
+
+[[package]]
 name = "be-cli"
 version = "0.1.0"
 dependencies = [
@@ -90,6 +99,7 @@ name = "be-diagnostics"
 version = "0.1.0"
 dependencies = [
  "be-core",
+ "be-gpu",
  "be-platform",
  "libc",
  "serde",
@@ -104,10 +114,19 @@ version = "0.1.0"
 dependencies = [
  "be-core",
  "be-diagnostics",
+ "be-gpu",
  "be-platform",
  "be-safety",
  "be-storage",
  "serde_json",
+]
+
+[[package]]
+name = "be-gpu"
+version = "0.1.0"
+dependencies = [
+ "ash",
+ "serde",
 ]
 
 [[package]]
@@ -177,6 +196,7 @@ dependencies = [
  "be-core",
  "be-diagnostics",
  "be-engine",
+ "be-gpu",
  "be-platform",
  "be-safety",
  "be-storage",

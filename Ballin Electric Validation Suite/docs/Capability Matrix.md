@@ -29,9 +29,13 @@ No feature has been verified on physical BE-01 hardware, on any physical worksta
 | Network link review | BE-T-NET-001 | Yes | Yes | Yes (PASS) | No | No throughput test |
 | Firmware & security review | BE-T-FW-001 | Yes | Yes | Yes (WARNING: no TPM) | No | Read-only |
 | GPU inventory & telemetry | BE-T-GPU-001 | Yes | Yes | UNSUPPORTED (no GPU) | No | |
-| GPU compute verification | BE-T-GPU-002 | **Planned** | — | Reports UNSUPPORTED | No | No backend (ADR-10) |
-| GPU VRAM pattern test | BE-T-GPU-003 | **Planned** | — | Reports UNSUPPORTED | No | |
-| GPU graphics stress (FurMark-style) | BE-T-GPU-004 | **Planned** | — | Reports UNSUPPORTED | No | |
+| Vulkan GPU backend (ash, runtime-loaded) | `be-gpu` | Yes | Yes, on Mesa lavapipe (a **software** Vulkan device) | Lavapipe only; VM has no GPU | No | Never run on NVIDIA, AMD or Intel GPU hardware |
+| GPU compute verification (CPU-reference known answer) | BE-T-GPU-002 | Yes | Yes (lavapipe; mismatch path via unit tests) | Lavapipe only | No | Software devices excluded unless `include_software` is set; otherwise UNSUPPORTED (BE-GPU-002) |
+| GPU VRAM pattern test (6 patterns, moving inversions) | BE-T-GPU-003 | Yes | Yes (lavapipe; an injected bit flip is detected at the exact offset) | Lavapipe only | No | Covers only allocatable memory (≤50% of heap); ECC counters not read |
+| GPU graphics stress (original FurMark-inspired shader) | BE-T-GPU-004 | Yes | Yes (lavapipe, short authorized run in tests) | Not run under load | No | High load: needs authorization and an approved safety profile; offscreen only |
+| Simultaneous multi-GPU runs | `mode: simultaneous` | Yes | Single software device only | — | No | Needs a multi-GPU machine |
+| GPU telemetry: temperature, power, clocks, throttle reasons, PCIe replay | NVML / amdgpu sysfs | Yes | Aggregation logic unit-tested | No GPU on VM | No | Intel GPU telemetry is not implemented |
+| CUDA / HIP backends | — | **Planned** | — | — | — | The backend-neutral `be-gpu` API is ready for them |
 | Worker isolation, heartbeat, timeout, crash, stop, kill | `be-safety::supervisor` | Yes | Yes (13 integration tests) | Yes | No | Windows Job Objects planned |
 | Safety preflight and sensor watchdog (over-temperature / sensor loss abort) | `be-safety` | Yes | Yes (simulated sensors) | No live high-load run | No | No approved safety profile exists yet |
 | Profiles (quick, standard, extended-stability, factory-burn-in DRAFT) | `profiles/` | Yes | Validation tested | quick run live | No | Durations and limits are proposals |

@@ -1,0 +1,56 @@
+#version 450
+// VRAM pattern write / verify in an owned allocation. Original code.
+// mode 0: write pattern; 1: verify; 2: verify then write inverted (moving
+// inversions); 3: verify inverted then write pattern; 4: TEST-ONLY fault
+// injection (flips bit 0 of word `seed`), never reachable from profiles.
+layout(local_size_x = 256) in;
+layout(std430, set = 0, binding = 0) buffer Data { uint data[]; };
+layout(std430, set = 0, binding = 1) buffer Result {
+    uint mismatches;
+    uint recorded;
+    uint first_index[8];
+    uint first_expected[8];
+    uint first_actual[8];
+} res;
+layout(push_constant) uniform PC { uint mode; uint pattern; uint seed; uint count; uint offset; } pc;
+
+uint hash(uint v) {
+    v ^= v >> 16; v *= 0x7feb352du; v ^= v >> 15; v *= 0x846ca68bu; v ^= v >> 16;
+    return v;
+}
+uint expected(uint idx) {
+    uint a = idx + pc.offset;
+    switch (pc.pattern) {
+        case 0u: return a ^ pc.seed;                       // own address
+        case 1u: return 1u << (a & 31u);                   // walking ones
+        case 2u: return ((a & 1u) == 0u) ? 0x55555555u : 0xAAAAAAAAu; // checkerboard
+        case 3u: return hash(a ^ pc.seed);                 // pseudo-random
+        case 4u: return 0u;                                // zeros
+        default: return 0xFFFFFFFFu;                       // ones
+    }
+}
+void check(uint idx, uint want) {
+    uint got = data[idx];
+    if (got != want) {
+        atomicAdd(res.mismatches, 1u);
+        uint slot = atomicAdd(res.recorded, 1u);
+        if (slot < 8u) {
+            res.first_index[slot] = idx + pc.offset;
+            res.first_expected[slot] = want;
+            res.first_actual[slot] = got;
+        }
+    }
+}
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (pc.mode == 4u) {
+        if (idx == 0u) { data[pc.seed] ^= 1u; }
+        return;
+    }
+    if (idx >= pc.count) return;
+    uint e = expected(idx);
+    if (pc.mode == 0u) { data[idx] = e; }
+    else if (pc.mode == 1u) { check(idx, e); }
+    else if (pc.mode == 2u) { check(idx, e); data[idx] = ~e; }
+    else if (pc.mode == 3u) { check(idx, ~e); data[idx] = e; }
+}

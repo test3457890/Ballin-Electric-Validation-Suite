@@ -1,6 +1,6 @@
 {
  "format": "BE Validation dependency manifest v1 (generated from cargo metadata; not a full CycloneDX/SPDX SBOM)",
- "generated_utc": "2026-11-25",
+ "generated_utc": "2026-11-26",
  "scope": "runtime and build dependencies for all targets of the workspace (dev-only crates excluded)",
  "components": [
   {
@@ -38,6 +38,12 @@
    "version": "1.0.105",
    "license": "MIT OR Apache-2.0",
    "repository": "https://github.com/dtolnay/anyhow"
+  },
+  {
+   "name": "ash",
+   "version": "0.38.0+1.3.281",
+   "license": "MIT OR Apache-2.0",
+   "repository": "https://github.com/ash-rs/ash"
   },
   {
    "name": "bitflags",
@@ -383,25 +389,25 @@
   },
   {
    "name": "syn",
-   "version": "3.0.10",
-   "license": "MIT OR Apache-2.0",
-   "repository": "https://github.com/dtolnay/syn"
-  },
-  {
-   "name": "syn",
    "version": "2.0.119",
    "license": "MIT OR Apache-2.0",
    "repository": "https://github.com/dtolnay/syn"
   },
   {
+   "name": "syn",
+   "version": "3.0.10",
+   "license": "MIT OR Apache-2.0",
+   "repository": "https://github.com/dtolnay/syn"
+  },
+  {
    "name": "thiserror",
-   "version": "2.0.21",
+   "version": "1.0.69",
    "license": "MIT OR Apache-2.0",
    "repository": "https://github.com/dtolnay/thiserror"
   },
   {
    "name": "thiserror",
-   "version": "1.0.69",
+   "version": "2.0.21",
    "license": "MIT OR Apache-2.0",
    "repository": "https://github.com/dtolnay/thiserror"
   },

@@ -1,0 +1,11 @@
+[package]
+name = "be-gpu"
+description = "GPU diagnostic engine (Vulkan via ash, runtime-loaded) for BE Validation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ash.workspace = true
+serde.workspace = true

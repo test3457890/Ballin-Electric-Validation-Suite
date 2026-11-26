@@ -21,6 +21,7 @@ libc.workspace = true
 
 [dev-dependencies]
 be-safety.workspace = true
+be-gpu.workspace = true
 be-engine.workspace = true
 be-storage.workspace = true
 tempfile.workspace = true
