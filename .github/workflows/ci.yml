@@ -45,6 +45,8 @@ jobs:
         run: ../.github/ci/step.sh clippy cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Test (fixtures and low-impact checks only)
         run: ../.github/ci/step.sh test cargo test --workspace --locked
+      - name: Build all executables
+        run: ../.github/ci/step.sh build cargo build --workspace --locked
       - name: GUI smoke test (Linux, Xvfb)
         if: runner.os == 'Linux'
         run: ../.github/ci/step.sh gui-smoke xvfb-run -a -s "-screen 0 1320x860x24" timeout 120 target/debug/bevalidate-gui --db "$RUNNER_TEMP/smoke.db" --exit-after 8
