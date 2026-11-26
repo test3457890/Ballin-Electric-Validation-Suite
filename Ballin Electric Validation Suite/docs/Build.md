@@ -85,7 +85,7 @@ A separate job runs `cargo deny check` and `cargo audit`. When a step fails, `.g
 
 ## Development builds (downloads)
 
-`.github/workflows/release.yml` runs when a `v*` tag is pushed (for example `v0.1.0-alpha`). It:
+`.github/workflows/release.yml` runs when a `v*` tag is pushed (for example `v0.1.0-alpha`), or when a branch named `release/<label>` is pushed (for example `release/v0.1.0-alpha`; the workflow then creates the tag itself). Only prerelease labels (`-alpha`, `-beta`, `-rc`, `-dev`) can be published, and the label needs a matching `docs/release-notes/<label>.md`. It:
 
 1. runs the tests on Windows;
 2. builds the release executables with MSVC and a static CRT;
