@@ -4,10 +4,14 @@
 # Code signing is NOT performed (no signing credentials exist).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-cargo build --release --locked -p be-cli -p be-gui -p be-worker
 VERSION=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
 LABEL="${1:-v$VERSION-dev}"
-case "$LABEL" in v*) ;; *) LABEL="v$VERSION-dev" ;; esac
+[[ "$LABEL" == v* ]] || LABEL="v$VERSION-dev"
+if [[ ! "$LABEL" =~ ^v[0-9]+[.][0-9]+[.][0-9]+(-[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*)?$ ]]; then
+    echo "Invalid release label" >&2
+    exit 2
+fi
+cargo build --release --locked -p be-cli -p be-gui -p be-worker
 ARCH=$(uname -m)
 NAME="BE-Validation-$LABEL-linux-$ARCH"
 OUT="dist/$NAME"

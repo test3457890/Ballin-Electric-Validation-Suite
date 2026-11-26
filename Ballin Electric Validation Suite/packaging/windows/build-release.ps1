@@ -7,13 +7,17 @@ param(
 )
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..\..")
+if ($Label -cnotmatch '^v') { $Label = "" }
+if ($Label -ne "" -and $Label -cnotmatch '\Av[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*)?\z') {
+    throw "Invalid release label"
+}
 if (-not $NoBuild) {
     $env:RUSTFLAGS = "-C target-feature=+crt-static"
     cargo build --release --locked -p be-cli -p be-gui -p be-worker
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
 }
 $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
-if ($Label -eq "" -or $Label -notmatch '^v') { $Label = "v$version-dev" }
+if ($Label -eq "") { $Label = "v$version-dev" }
 $name = "BE-Validation-$Label-windows-x64-portable"
 $out = "dist\$name"
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }

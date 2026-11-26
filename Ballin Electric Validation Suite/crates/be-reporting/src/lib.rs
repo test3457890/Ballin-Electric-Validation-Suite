@@ -178,13 +178,7 @@ fn redact_json(v: &mut serde_json::Value) {
             u.remove("order_ref");
             u.remove("bom_json");
         }
-        if let Some(svc) = o.get_mut("service").and_then(|s| s.as_array_mut()) {
-            for s in svc {
-                if let Some(so) = s.as_object_mut() {
-                    so.remove("technician");
-                }
-            }
-        }
+        o.remove("service");
         if let Some(inv) = o.get_mut("inventory").and_then(|i| i.as_object_mut()) {
             if let Some(sys) = inv.get_mut("system").and_then(|s| s.as_object_mut()) {
                 sys.remove("hostname");
@@ -751,6 +745,16 @@ mod tests {
         let m = measurements_csv(&d);
         assert!(m.contains("Unavailable"));
         assert_eq!(csv_field("=1+1"), "\"'=1+1\"");
+    }
+
+    #[test]
+    fn missing_recorded_step_marks_a_completed_run_incomplete() {
+        let mut d = data();
+        d.run.profile_json =
+            r#"{"schema":1,"id":"quick","name":"Quick","version":"1","steps":[{"test":"A"}]}"#
+                .into();
+        assert!(completeness(&d.run, &[]).contains("INCOMPLETE RUN"));
+        assert!(completeness(&d.run, &d.results).contains("INCOMPLETE RUN"));
     }
 
     #[test]
