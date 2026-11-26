@@ -49,6 +49,7 @@ pub enum Msg {
     InventoryDone(Box<Inventory>, Vec<Capability>),
     RunProfile,
     RunTargeted,
+    RunFollowUp,
     Stop,
     Engine(EngineEvent),
     EngineEnded(Option<String>),
@@ -61,6 +62,7 @@ pub enum Msg {
     SaveJson,
     ExportCsv,
     ExportHtml(bool),
+    ExportPdf,
     Print,
     Backup,
     SupportBundle,
@@ -104,6 +106,7 @@ struct State {
     theme: Theme,
     operator: String,
     fixture_mode: bool,
+    customer: bool,
     db_path: PathBuf,
     store: Option<be_storage::Store>,
     store_error: Option<String>,
@@ -118,6 +121,7 @@ struct State {
     last_run_id: Option<i64>,
     last_profile: String,
     evaluation: Option<ReleaseEvaluation>,
+    analysis: Option<be_core::isolation::Analysis>,
     events: Vec<EventRecord>,
     log_min: EventLevel,
     log_test_filter: Option<String>,
@@ -320,6 +324,12 @@ fn build_ui(s: &Sender<Msg>, th: &Theme, fixture: bool) -> Ui {
     );
     m(
         &mut menu,
+        "&File/Export Report (P&DF)...",
+        Shortcut::None,
+        Msg::ExportPdf,
+    );
+    m(
+        &mut menu,
         "&File/Export C&ustomer Report (HTML)...",
         Shortcut::None,
         Msg::ExportHtml(true),
@@ -361,6 +371,12 @@ fn build_ui(s: &Sender<Msg>, th: &Theme, fixture: bool) -> Ui {
         "&Diagnostics/Run &Selected Test Only (Targeted)",
         Shortcut::Ctrl | 't',
         Msg::RunTargeted,
+    );
+    m(
+        &mut menu,
+        "&Diagnostics/Run &Follow-up Sequence (from fault isolation)",
+        Shortcut::None,
+        Msg::RunFollowUp,
     );
     m(
         &mut menu,
@@ -1306,6 +1322,8 @@ fn update_status(ui: &mut Ui, st: &State) {
     ));
     let mode = if st.fixture_mode {
         "FIXTURE MODE"
+    } else if st.customer {
+        "Customer mode"
     } else {
         "Live"
     };
@@ -1696,6 +1714,80 @@ fn update_detail(ui: &mut Ui, st: &State) {
         f.redraw();
     }
     update_controls(ui, st);
+}
+
+fn apply_customer_restrictions(ui: &mut Ui) {
+    for path in [
+        "&Manufacturing",
+        "&Tests/&Authorize High-Load Testing...",
+        "&Tests/Re&voke High-Load Authorization",
+        "&File/Database &Backup...",
+        "T&ools/&Audit Log...",
+    ] {
+        let idx = ui.menu.find_index(path);
+        if idx >= 0 {
+            ui.menu.remove(idx);
+        }
+    }
+    let mut prof_items = Vec::new();
+    for p in be_engine::builtin_profiles() {
+        if p.id != "quick" {
+            prof_items.push(format!("&Tests/Profile/{}", p.name.replace('/', "\\/")));
+        }
+    }
+    for path in prof_items {
+        let idx = ui.menu.find_index(&path);
+        if idx >= 0 {
+            ui.menu.remove(idx);
+        }
+    }
+    ui.profile_choice.clear();
+    ui.profile_choice.add_choice("Quick Diagnostics");
+    ui.profile_choice.set_value(0);
+    ui.tabs.remove(&ui.tab_mfg);
+    ui.tabs.set_value(&ui.tab_tests).ok();
+    ui.win
+        .set_label(&format!("{} — Customer Diagnostics", be_core::PRODUCT_NAME));
+}
+
+fn analysis_text(a: &be_core::isolation::Analysis) -> String {
+    if a.findings.is_empty() {
+        return format!(
+            "Fault isolation (ruleset {}): no correlated faults in the last run.",
+            a.ruleset_version
+        );
+    }
+    let mut t = format!(
+        "FAULT ISOLATION (ruleset {}). {}\n",
+        a.ruleset_version, a.caveat
+    );
+    for f in &a.findings {
+        t.push_str(&format!(
+            "\n{}{}\n",
+            f.title,
+            if f.hold { "  [HOLD UNIT]" } else { "" }
+        ));
+        for o in f.observations.iter().take(4) {
+            t.push_str(&format!("  observed: {o}\n"));
+        }
+        for h in &f.hypotheses {
+            t.push_str(&format!(
+                "  possible cause [{}]: {}\n",
+                h.confidence.label(),
+                h.cause
+            ));
+        }
+        t.push_str(&format!(
+            "  next safe tests: {}\n  escalation: {}\n",
+            f.next_tests.join(", "),
+            f.escalation
+        ));
+    }
+    t.push_str(&format!(
+        "\nFollow-up sequence: {}  (Diagnostics > Run Follow-up Sequence)\n",
+        a.follow_up.join(" -> ")
+    ));
+    t
 }
 
 fn fill_faults(ui: &mut Ui, st: &State) {
@@ -2176,34 +2268,36 @@ fn build_tree(ui: &mut Ui, st: &mut State) {
             ],
         );
     }
-    let units = st
-        .store
-        .as_ref()
-        .and_then(|s| s.list_units().ok())
-        .unwrap_or_default();
-    put(
-        &mut t,
-        "Manufacturing",
-        "Manufacturing",
-        vec![kv("Unit records", units.len().to_string())],
-    );
-    for u in units.iter().take(200) {
+    if !st.customer {
+        let units = st
+            .store
+            .as_ref()
+            .and_then(|s| s.list_units().ok())
+            .unwrap_or_default();
         put(
             &mut t,
-            &format!("Manufacturing/{}", tree_label(&u.serial)),
-            &u.serial,
-            vec![kv("Release state", u.release_state.label().into())],
+            "Manufacturing",
+            "Manufacturing",
+            vec![kv("Unit records", units.len().to_string())],
+        );
+        for u in units.iter().take(200) {
+            put(
+                &mut t,
+                &format!("Manufacturing/{}", tree_label(&u.serial)),
+                &u.serial,
+                vec![kv("Release state", u.release_state.label().into())],
+            );
+        }
+        put(
+            &mut t,
+            "Service Records",
+            "Service Records",
+            vec![kv(
+                "View",
+                "Select a unit on the Manufacturing tab to see its service history".into(),
+            )],
         );
     }
-    put(
-        &mut t,
-        "Service Records",
-        "Service Records",
-        vec![kv(
-            "View",
-            "Select a unit on the Manufacturing tab to see its service history".into(),
-        )],
-    );
     put(
         &mut t,
         "Event Logs",
@@ -2594,6 +2688,30 @@ fn handle_engine(ui: &mut Ui, st: &mut State, e: EngineEvent) {
         } => {
             st.evaluation = evaluation;
             let _ = overall;
+            let keyed: Vec<(String, TestResult)> = st
+                .steps
+                .iter()
+                .zip(&st.results)
+                .filter_map(|(s, r)| r.clone().map(|r| (s.key.clone(), r)))
+                .collect();
+            let a = be_core::isolation::analyze(&keyed);
+            ui.fault_detail.set_text(&analysis_text(&a));
+            if !a.findings.is_empty() {
+                add_event(
+                    ui,
+                    st,
+                    EventRecord::new(
+                        EventLevel::Warn,
+                        format!(
+                            "Fault isolation: {} finding(s); see Errors tab. Follow-up available: Diagnostics > Run Follow-up Sequence ({}).",
+                            a.findings.len(),
+                            a.follow_up.join(", ")
+                        ),
+                    ),
+                    true,
+                );
+            }
+            st.analysis = Some(a);
         }
     }
     update_progress(ui, st);
@@ -2721,6 +2839,35 @@ fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
             let p = st.profiles[st.profile_idx].clone();
             let unit = st.run_unit.clone();
             start_run(ui, st, s, p, unit);
+        }
+        Msg::RunFollowUp => {
+            let Some(a) = st.analysis.clone() else {
+                return dialogs::alert("No fault isolation result yet. Run a profile first.");
+            };
+            let descs = be_diagnostics::descriptors(st.fixture_mode);
+            let high = |t: &str| descs.iter().any(|d| d.id == t && d.load == LoadClass::High);
+            let Some(p) = be_core::isolation::follow_up_profile(&a, &high, st.last_run_id) else {
+                return dialogs::message(
+                    "Fault isolation suggests no follow-up tests for the last run.",
+                );
+            };
+            let msg = format!(
+                "Run the automatic follow-up sequence?\n\n{}\n\nThis is a diagnostic run only; it never qualifies a unit for release.",
+                p.steps
+                    .iter()
+                    .map(|s| s.test.clone())
+                    .collect::<Vec<_>>()
+                    .join(" -> ")
+            );
+            if dialogs::confirm(&msg, "Run follow-up", "Cancel") == Some(0) {
+                info(
+                    ui,
+                    st,
+                    EventLevel::Info,
+                    format!("Follow-up sequence started: {}", p.description),
+                );
+                start_run(ui, st, s, p, None);
+            }
         }
         Msg::RunTargeted => {
             let Some(i) = st.selected_step else { return };
@@ -2875,26 +3022,36 @@ fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
             ui.tabs.set_value(&ui.tab_tests).ok();
             ui.tabs.redraw();
         }
-        Msg::SaveJson | Msg::ExportCsv | Msg::ExportHtml(_) | Msg::Print => {
+        Msg::SaveJson | Msg::ExportCsv | Msg::ExportHtml(_) | Msg::ExportPdf | Msg::Print => {
             let Some(d) = current_report(st) else {
                 return dialogs::alert(
                     "No stored run is available yet. Run a profile first (results are stored in the local database).",
                 );
             };
-            let (content, ext, label) = match &msg {
+            let aud = if st.customer {
+                be_reporting::Audience::Customer
+            } else {
+                be_reporting::Audience::Internal
+            };
+            let (content, ext, label): (Vec<u8>, &str, &str) = match &msg {
                 Msg::SaveJson => (
-                    be_reporting::to_json(&d, be_reporting::Audience::Internal),
+                    be_reporting::to_json(&d, aud).into_bytes(),
                     "json",
                     "JSON results",
                 ),
-                Msg::ExportCsv => (be_reporting::results_csv(&d), "csv", "CSV results"),
+                Msg::ExportCsv => (
+                    be_reporting::results_csv(&d).into_bytes(),
+                    "csv",
+                    "CSV results",
+                ),
+                Msg::ExportPdf => (be_reporting::pdf::to_pdf(&d, aud), "pdf", "PDF report"),
                 Msg::ExportHtml(true) => (
-                    be_reporting::to_html(&d, be_reporting::Audience::Customer),
+                    be_reporting::to_html(&d, be_reporting::Audience::Customer).into_bytes(),
                     "html",
                     "customer report",
                 ),
                 _ => (
-                    be_reporting::to_html(&d, be_reporting::Audience::Internal),
+                    be_reporting::to_html(&d, aud).into_bytes(),
                     "html",
                     "report",
                 ),
@@ -2908,7 +3065,7 @@ fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
                     ));
                 }
                 let path = dir.join(format!("run-{}-report.html", d.run.id));
-                match dialogs::write_atomic(&path, content.as_bytes()) {
+                match dialogs::write_atomic(&path, &content) {
                     Ok(()) => {
                         let opened = dialogs::open_in_system_viewer(&path);
                         info(
@@ -2936,7 +3093,7 @@ fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
             ) else {
                 return;
             };
-            match dialogs::write_atomic(&path, content.as_bytes()) {
+            match dialogs::write_atomic(&path, &content) {
                 Ok(()) => info(
                     ui,
                     st,
@@ -3459,6 +3616,14 @@ fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let fixture_mode = args.iter().any(|a| a == "--fixture-mode");
+    // Restricted customer diagnostic mode (usability restriction, not a
+    // security boundary): no manufacturing records, no high-load
+    // authorization, Quick profile only, redacted reports.
+    let customer = cfg!(feature = "customer-edition")
+        || args.iter().any(|a| a == "--customer")
+        || std::env::var("BE_VALIDATION_MODE")
+            .map(|v| v.eq_ignore_ascii_case("customer"))
+            .unwrap_or(false);
     let db_arg = args
         .iter()
         .position(|a| a == "--db")
@@ -3485,11 +3650,18 @@ fn main() {
     let operator = std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
         .unwrap_or_else(|_| "Local".into());
-    let profiles = be_engine::builtin_profiles();
+    let profiles: Vec<Profile> = be_engine::builtin_profiles()
+        .into_iter()
+        .filter(|p| !customer || p.id == "quick")
+        .collect();
+    if customer {
+        apply_customer_restrictions(&mut ui);
+    }
     let mut st = State {
         theme,
         operator: operator.clone(),
         fixture_mode,
+        customer,
         db_path,
         store,
         store_error,
@@ -3504,6 +3676,7 @@ fn main() {
         last_run_id: None,
         last_profile: String::new(),
         evaluation: None,
+        analysis: None,
         events: vec![],
         log_min: EventLevel::Debug,
         log_test_filter: None,

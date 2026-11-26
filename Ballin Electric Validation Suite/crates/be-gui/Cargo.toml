@@ -6,6 +6,10 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+# Build a GUI that always runs in restricted customer mode.
+customer-edition = []
+
 [[bin]]
 name = "bevalidate-gui"
 path = "src/main.rs"

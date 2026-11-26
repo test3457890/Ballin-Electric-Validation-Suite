@@ -80,10 +80,19 @@ High-load runs need explicit authorization and an approved safety profile:
 bevalidate run --profile extended-stability --authorize-high-load --safety-profile ./approved/be01-revA.json
 ```
 
-Reports for stored runs (PDF is not implemented; it returns exit code 2 with an explanation):
+Reports for stored runs (`--format` is `html`, `json`, `csv` or `pdf`):
 
 ```bash
 bevalidate report --run-id 12 --format html --audience customer --out report.html
 ```
+
+Fault isolation reads a stored run and lists observations, likely causes with a confidence level, and suggested follow-up tests. `follow-up` runs those tests as a diagnostic profile, which is never release-eligible and never includes high-load steps:
+
+```bash
+bevalidate analyze --run-id 12
+bevalidate follow-up --run-id 12
+```
+
+Customer mode (`--customer`, `BE_VALIDATION_MODE=customer`, or a build with the `customer-edition` feature) allows only the Quick profile, read-only views and customer-audience reports. Manufacturing commands, authorization and high load are refused with exit code 6. Customer mode is a convenience restriction, not a security boundary.
 
 Other commands: `sensors [--watch N]`, `runs`, `events`, `baseline add|list|compare`, `faults`, `audit`, `backup <dest>`, `support-bundle --out file.json`. The support bundle redacts host name, serial numbers and MAC addresses, and is never uploaded.

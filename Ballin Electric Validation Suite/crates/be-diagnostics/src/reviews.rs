@@ -462,6 +462,88 @@ pub fn read_kernel_log() -> Result<Vec<String>, String> {
     }
 }
 
+/// Windows Hardware Error Architecture (WHEA-Logger) events, as JSON from
+/// `Get-WinEvent ... | ConvertTo-Json`. Classification is conservative:
+/// corrected errors warn, fatal errors fail; the component is taken from
+/// the documented event ID where known, otherwise from the message text.
+pub fn evaluate_whea(json: &str, r: &mut TestResult) -> TestStatus {
+    let v: serde_json::Value = match serde_json::from_str(json.trim()) {
+        Ok(v) => v,
+        Err(_) if json.trim().is_empty() => serde_json::Value::Array(vec![]),
+        Err(e) => {
+            r.notes
+                .push(format!("WHEA event data could not be parsed: {e}"));
+            return TestStatus::Inconclusive;
+        }
+    };
+    let events = match v {
+        serde_json::Value::Array(a) => a,
+        other => vec![other],
+    };
+    r.measurements.push(Measurement::num(
+        "WHEA events since boot",
+        events.len() as f64,
+        "",
+    ));
+    let mut status = TestStatus::Pass;
+    for e in events.iter().take(64) {
+        let id = e.get("Id").and_then(|x| x.as_u64()).unwrap_or(0);
+        let msg = e
+            .get("Message")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
+        let time = e
+            .get("Time")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
+        let lower = msg.to_ascii_lowercase();
+        let fatal = id == 18 || id == 1 || lower.contains("fatal");
+        let code = match id {
+            17 => "BE-PCIE-003",
+            47 => "BE-MEM-003",
+            19 | 18 => "BE-CPU-003",
+            _ if lower.contains("pci express") => "BE-PCIE-003",
+            _ if lower.contains("memory") => "BE-MEM-003",
+            _ => "BE-CPU-003",
+        };
+        let kind = if fatal { "Fatal" } else { "Corrected" };
+        r.faults.push(FaultRecord::new(
+            code,
+            format!("WHEA {kind} hardware error (event {id})"),
+            format!("{time} {}", msg.chars().take(300).collect::<String>()),
+        ));
+        status = if fatal {
+            TestStatus::Fail
+        } else if status == TestStatus::Pass {
+            TestStatus::Warning
+        } else {
+            status
+        };
+    }
+    status
+}
+
+/// Read WHEA-Logger events since boot (Windows only).
+pub fn read_whea() -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        let script = "$b=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime; Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Microsoft-Windows-WHEA-Logger'; StartTime=$b} -MaxEvents 500 -ErrorAction SilentlyContinue | Select-Object Id,@{n='Time';e={$_.TimeCreated.ToUniversalTime().ToString('o')}},@{n='Message';e={($_.Message -replace '\\s+',' ')}} | ConvertTo-Json -Compress";
+        let ps =
+            be_core::fsutil::trusted_tool("powershell").ok_or("Windows PowerShell not found")?;
+        let out = Command::new(ps)
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .output()
+            .map_err(|e| format!("PowerShell unavailable: {e}"))?;
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    }
+    #[cfg(not(windows))]
+    {
+        Err("WHEA is a Windows facility".into())
+    }
+}
+
 impl DiagnosticTest for HardwareErrorLog {
     fn descriptor(&self) -> TestDescriptor {
         desc(
@@ -472,7 +554,7 @@ impl DiagnosticTest for HardwareErrorLog {
             LoadClass::ReadOnly,
             Privilege::ElevatedOptional,
             3,
-            "Reviews kernel/system log events since boot (Linux journal; Windows System log incl. WHEA) for machine-check, ECC, PCIe AER, storage and thermal events, and reads EDAC ECC counters.",
+            "Reviews kernel/system log events since boot (Linux journal; Windows System log plus dedicated WHEA-Logger classification) for machine-check, ECC, PCIe AER, storage and thermal events, and reads EDAC ECC counters.",
             "Matching log lines, ECC counters",
             "Keyword classification is heuristic and lists events for review; it does not diagnose components. Access may need adm/systemd-journal group or administrator.",
             json!({}),
@@ -492,6 +574,20 @@ impl DiagnosticTest for HardwareErrorLog {
                     .collect()
             })
             .unwrap_or_default();
+        #[cfg(windows)]
+        let whea_status = match read_whea() {
+            Ok(j) => Some(evaluate_whea(&j, &mut r)),
+            Err(e) => {
+                r.notes.push(format!("WHEA events not readable: {e}"));
+                None
+            }
+        };
+        #[cfg(not(windows))]
+        let whea_status: Option<TestStatus> = None;
+        let combine = |st: TestStatus| match whea_status {
+            Some(w) if w.severity() > st.severity() => w,
+            _ => st,
+        };
         match read_kernel_log() {
             Ok(lines) => {
                 let st = evaluate_log_lines(&lines, &ecc, &mut r);
@@ -499,7 +595,10 @@ impl DiagnosticTest for HardwareErrorLog {
                     "{} warning-or-worse kernel/system log entries since boot",
                     lines.len()
                 );
-                finish(r, started, st)
+                {
+                    let st = combine(st);
+                    finish(r, started, st)
+                }
             }
             Err(e) => {
                 r.faults.push(FaultRecord::new(
@@ -509,15 +608,12 @@ impl DiagnosticTest for HardwareErrorLog {
                 ));
                 let st = evaluate_log_lines(&[], &ecc, &mut r);
                 r.coverage = "System log not readable; ECC counters only".into();
-                finish(
-                    r,
-                    started,
-                    if st == TestStatus::Fail {
-                        TestStatus::Fail
-                    } else {
-                        TestStatus::Inconclusive
-                    },
-                )
+                let st = if st == TestStatus::Fail {
+                    TestStatus::Fail
+                } else {
+                    TestStatus::Inconclusive
+                };
+                finish(r, started, combine(st))
             }
         }
     }
@@ -969,6 +1065,28 @@ mod tests {
         ];
         let mut r = result();
         assert_eq!(evaluate_sensors(&fan, &fan, &mut r), TestStatus::Warning);
+    }
+
+    #[test]
+    fn whea_classification() {
+        let j = r#"[{"Id":19,"Time":"2026-11-26T01:00:00Z","Message":"A corrected hardware error has occurred. Component: Processor Core"},
+                    {"Id":17,"Time":"2026-11-26T01:01:00Z","Message":"A corrected hardware error has occurred. Component: PCI Express Root Port"}]"#;
+        let mut r = result();
+        assert_eq!(evaluate_whea(j, &mut r), TestStatus::Warning);
+        let codes: Vec<_> = r.faults.iter().map(|f| f.code.as_str()).collect();
+        assert_eq!(codes, ["BE-CPU-003", "BE-PCIE-003"]);
+        let mut r = result();
+        assert_eq!(
+            evaluate_whea(
+                r#"{"Id":18,"Message":"A fatal hardware error has occurred."}"#,
+                &mut r
+            ),
+            TestStatus::Fail
+        );
+        let mut r = result();
+        assert_eq!(evaluate_whea("", &mut r), TestStatus::Pass);
+        let mut r = result();
+        assert_eq!(evaluate_whea("not json", &mut r), TestStatus::Inconclusive);
     }
 
     #[test]

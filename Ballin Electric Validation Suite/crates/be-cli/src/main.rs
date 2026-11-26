@@ -24,6 +24,10 @@ struct Cli {
     /// SQLite database path (default: per-user data directory, or $BE_VALIDATION_DB)
     #[arg(long, global = true)]
     db: Option<PathBuf>,
+    /// Restricted customer diagnostic mode (also BE_VALIDATION_MODE=customer,
+    /// or always on in builds with the `customer-edition` feature)
+    #[arg(long, global = true)]
+    customer: bool,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -154,6 +158,25 @@ enum Cmd {
         #[command(subcommand)]
         cmd: BaselineCmd,
     },
+    /// Fault isolation: correlate a stored run's results into observations, hypotheses and next tests
+    Analyze {
+        #[arg(long)]
+        run_id: i64,
+        #[arg(long, value_enum, default_value = "text")]
+        format: Format,
+    },
+    /// Automatic follow-up sequence for a stored run (diagnostic only; never release-qualifying)
+    FollowUp {
+        #[arg(long)]
+        run_id: i64,
+        /// Execute the follow-up sequence now (otherwise print the generated profile)
+        #[arg(long)]
+        execute: bool,
+        #[arg(long, default_value = "local-operator")]
+        operator: String,
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
     /// Fault-code catalog
     Faults {
         #[arg(long, value_enum, default_value = "text")]
@@ -199,7 +222,7 @@ struct RunArgs {
     /// Link this run as rework of an earlier run
     #[arg(long)]
     rework_of: Option<i64>,
-    /// Directory for report.html, report.json, results.csv, measurements.csv
+    /// Directory for report.html, report.pdf, report.json, results.csv, measurements.csv
     #[arg(long)]
     output: Option<PathBuf>,
     #[arg(long, default_value = "local-operator")]
@@ -216,6 +239,8 @@ struct RunArgs {
     /// Do not persist to the database
     #[arg(long)]
     no_db: bool,
+    #[arg(skip)]
+    customer: bool,
 }
 
 #[derive(Subcommand)]
@@ -345,8 +370,60 @@ fn store(db: &Option<PathBuf>) -> Result<Store> {
     be_engine::open_store(db.as_deref()).map_err(|e| anyhow!(e))
 }
 
+/// Customer mode: a usability restriction for end-user diagnostics. It is
+/// not a security boundary (a user with file access can run other builds);
+/// factory stations rely on OS accounts and the audit log.
+fn customer_mode(flag: bool) -> bool {
+    cfg!(feature = "customer-edition")
+        || flag
+        || std::env::var("BE_VALIDATION_MODE")
+            .map(|v| v.eq_ignore_ascii_case("customer"))
+            .unwrap_or(false)
+}
+
+fn customer_allows(cmd: &Cmd) -> Result<(), String> {
+    match cmd {
+        Cmd::Inventory { .. }
+        | Cmd::Capabilities { .. }
+        | Cmd::Sensors { .. }
+        | Cmd::Tests { .. }
+        | Cmd::Runs { .. }
+        | Cmd::Analyze { .. }
+        | Cmd::Faults { .. }
+        | Cmd::SupportBundle { .. } => Ok(()),
+        Cmd::Profile {
+            cmd: ProfileCmd::List,
+        } => Ok(()),
+        Cmd::Report { .. } => Ok(()),
+        Cmd::Run(a) => {
+            if a.profile != "quick" {
+                return Err(
+                    "customer mode runs only the built-in Quick Diagnostics profile".into(),
+                );
+            }
+            if a.authorize_high_load
+                || a.safety_profile.is_some()
+                || a.fixture_mode
+                || a.unit.is_some()
+                || a.rework_of.is_some()
+            {
+                return Err("customer mode does not allow high-load authorization, fixtures or manufacturing records".into());
+            }
+            Ok(())
+        }
+        _ => {
+            Err("this command is not available in customer mode (factory/service function)".into())
+        }
+    }
+}
+
 fn dispatch(cli: Cli) -> Result<i32> {
     let db = cli.db.clone();
+    let customer = customer_mode(cli.customer);
+    if customer && let Err(e) = customer_allows(&cli.cmd) {
+        eprintln!("Not permitted: {e}.");
+        return Ok(exit::NOT_AUTHORIZED);
+    }
     match cli.cmd {
         Cmd::Inventory { format } => {
             let inv = be_platform::native().inventory();
@@ -469,7 +546,10 @@ fn dispatch(cli: Cli) -> Result<i32> {
                 }
             },
         },
-        Cmd::Run(a) => cmd_run(&db, a),
+        Cmd::Run(mut a) => {
+            a.customer = customer;
+            cmd_run(&db, a)
+        }
         Cmd::Report {
             run_id,
             format,
@@ -478,7 +558,7 @@ fn dispatch(cli: Cli) -> Result<i32> {
         } => {
             let s = store(&db)?;
             let d = ReportData::from_store(&s, run_id).map_err(invalid)?;
-            let aud = if audience == AudienceArg::Customer {
+            let aud = if customer || audience == AudienceArg::Customer {
                 Audience::Customer
             } else {
                 Audience::Internal
@@ -488,10 +568,15 @@ fn dispatch(cli: Cli) -> Result<i32> {
                 ReportFormat::Csv => be_reporting::results_csv(&d),
                 ReportFormat::Html => be_reporting::to_html(&d, aud),
                 ReportFormat::Pdf => {
-                    eprintln!(
-                        "PDF output is not implemented (native PDF library pending license review). Generate HTML and print to PDF."
-                    );
-                    return Ok(exit::INCOMPLETE);
+                    let bytes = be_reporting::pdf::to_pdf(&d, aud);
+                    match out {
+                        Some(p) => write_atomic(&p, &bytes)?,
+                        None => {
+                            use std::io::Write as _;
+                            std::io::stdout().write_all(&bytes)?;
+                        }
+                    }
+                    return Ok(exit::PASS);
                 }
             };
             match out {
@@ -638,6 +723,71 @@ fn dispatch(cli: Cli) -> Result<i32> {
             Ok(exit::PASS)
         }
         Cmd::Baseline { cmd } => cmd_baseline(&db, cmd),
+        Cmd::Analyze { run_id, format } => {
+            let s = store(&db)?;
+            let results = s.results_for_run(run_id)?;
+            if results.is_empty() {
+                return Err(invalid(format!("run {run_id} has no results")));
+            }
+            let a = be_core::isolation::analyze(&results);
+            match format {
+                Format::Json => println!("{}", serde_json::to_string_pretty(&a)?),
+                Format::Text => print_analysis(&a, &results),
+            }
+            Ok(exit::PASS)
+        }
+        Cmd::FollowUp {
+            run_id,
+            execute,
+            operator,
+            output,
+        } => {
+            let s = store(&db)?;
+            let run = s
+                .get_run(run_id)?
+                .ok_or_else(|| invalid(format!("run {run_id} not found")))?;
+            let results = s.results_for_run(run_id)?;
+            let a = be_core::isolation::analyze(&results);
+            let descs = be_diagnostics::descriptors(false);
+            let high = |t: &str| {
+                descs
+                    .iter()
+                    .any(|d| d.id == t && d.load == be_core::model::LoadClass::High)
+            };
+            let Some(p) = be_core::isolation::follow_up_profile(&a, &high, Some(run_id)) else {
+                println!("No follow-up tests suggested for run {run_id}.");
+                return Ok(exit::PASS);
+            };
+            if !execute {
+                println!("{}", serde_json::to_string_pretty(&p)?);
+                eprintln!(
+                    "Re-run with --execute to run this diagnostic sequence (results are linked to run {run_id})."
+                );
+                return Ok(exit::PASS);
+            }
+            let tmp = std::env::temp_dir()
+                .join(format!("be-followup-{}-{run_id}.json", std::process::id()));
+            be_core::fsutil::write_atomic(&tmp, serde_json::to_string_pretty(&p)?.as_bytes())?;
+            let args = RunArgs {
+                profile: tmp.to_string_lossy().into_owned(),
+                unit: run.unit_serial.clone(),
+                rework_of: if run.unit_serial.is_some() {
+                    Some(run_id)
+                } else {
+                    None
+                },
+                output,
+                operator,
+                authorize_high_load: false,
+                safety_profile: None,
+                fixture_mode: run.fixture,
+                no_db: false,
+                customer: false,
+            };
+            let r = cmd_run(&db, args);
+            let _ = std::fs::remove_file(&tmp);
+            r
+        }
         Cmd::Faults { format } => {
             match format {
                 Format::Json => println!(
@@ -807,15 +957,20 @@ fn cmd_run(db: &Option<PathBuf>, a: RunArgs) -> Result<i32> {
     }
     println!("Overall: {}", summary.overall.label());
     if let (Some(dir), Some(st), Some(id)) = (&a.output, &s, summary.run_id) {
+        let aud = if a.customer {
+            Audience::Customer
+        } else {
+            Audience::Internal
+        };
         let d = ReportData::from_store(st, id).map_err(|e| anyhow!(e))?;
         std::fs::create_dir_all(dir)?;
         write_atomic(
             &dir.join("report.html"),
-            be_reporting::to_html(&d, Audience::Internal).as_bytes(),
+            be_reporting::to_html(&d, aud).as_bytes(),
         )?;
         write_atomic(
             &dir.join("report.json"),
-            be_reporting::to_json(&d, Audience::Internal).as_bytes(),
+            be_reporting::to_json(&d, aud).as_bytes(),
         )?;
         write_atomic(
             &dir.join("results.csv"),
@@ -825,6 +980,7 @@ fn cmd_run(db: &Option<PathBuf>, a: RunArgs) -> Result<i32> {
             &dir.join("measurements.csv"),
             be_reporting::measurements_csv(&d).as_bytes(),
         )?;
+        write_atomic(&dir.join("report.pdf"), &be_reporting::pdf::to_pdf(&d, aud))?;
         println!("Reports written to {} (run {id})", dir.display());
     } else if a.output.is_some() {
         eprintln!("Reports require the database (omit --no-db).");
@@ -1132,6 +1288,49 @@ fn compare_inventory(a: &Inventory, b: &Inventory) -> Vec<String> {
         d.push("PCI device list changed".into());
     }
     d
+}
+
+fn print_analysis(
+    a: &be_core::isolation::Analysis,
+    results: &[(String, be_core::model::TestResult)],
+) {
+    println!(
+        "Fault isolation (ruleset {}), {} result(s) analysed",
+        a.ruleset_version,
+        results.len()
+    );
+    if !be_core::isolation::live_only(results) {
+        println!("NOTE: run contains FIXTURE results; findings are for software testing only.");
+    }
+    if a.findings.is_empty() {
+        println!("No correlated faults found.");
+        return;
+    }
+    for f in &a.findings {
+        println!(
+            "\n[{}] {}{}",
+            f.rule,
+            f.title,
+            if f.hold { "  (hold unit)" } else { "" }
+        );
+        println!("  Confirmed observations:");
+        for o in &f.observations {
+            println!("    - {o}");
+        }
+        println!("  Possible causes (not a diagnosis):");
+        for h in &f.hypotheses {
+            println!(
+                "    - [{}] {}  (evidence: {})",
+                h.confidence.label(),
+                h.cause,
+                h.evidence.join("; ")
+            );
+        }
+        println!("  Next safe tests: {}", f.next_tests.join(", "));
+        println!("  Escalation: {}", f.escalation);
+    }
+    println!("\nFollow-up sequence: {}", a.follow_up.join(" -> "));
+    println!("{}", a.caveat);
 }
 
 fn print_inventory(inv: &Inventory) {

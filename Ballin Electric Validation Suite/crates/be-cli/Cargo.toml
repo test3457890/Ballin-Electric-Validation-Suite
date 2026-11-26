@@ -6,6 +6,10 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+# Build a customer edition: restricted mode is always on.
+customer-edition = []
+
 [[bin]]
 name = "bevalidate"
 path = "src/main.rs"
