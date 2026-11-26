@@ -12,7 +12,7 @@ No feature has been verified on physical BE-01 hardware, on any physical worksta
 | --- | --- | --- | --- | --- | --- | --- |
 | Linux inventory (CPU, memory, storage, PCI, network, USB, DMI, firmware) | `be-platform::linux` | Yes | Yes | Yes (no DMI/EFI/TPM present on VM: reported unavailable) | No | Serial numbers need root |
 | Linux sensors (hwmon temp/fan/voltage/power/current, thermal zones, cpufreq) | `be-platform::linux::sensors` | Yes | Yes | Ran; VM exposes none (reported unavailable) | No | Depends on kernel drivers |
-| Windows inventory (CIM: CPU, OS, memory, disks, GPUs, NICs, ACPI thermal, Secure Boot, TPM) | `be-platform::windows_cim` | Yes | Yes (JSON parsing) | Cross-compiled only | No | Never executed on Windows. PCIe link and ECC are not implemented on Windows |
+| Windows inventory (CIM: CPU, OS, memory, disks, GPUs, NICs, ACPI thermal, Secure Boot, TPM) | `be-platform::windows_cim` | Yes | Yes (JSON parsing) | Runs in CI on Windows Server 2022 runners (virtual machines without real sensors or GPUs) | No | Not run on a physical Windows workstation. PCIe link and ECC are not implemented on Windows |
 | NVIDIA telemetry (NVML, runtime-loaded) | `be-platform::gpu` | Yes | Bus-ID normalization only | NVML absent: reported unsupported | No | Untested with an NVIDIA driver |
 | AMD GPU VRAM accounting (amdgpu sysfs) | `be-platform::linux` | Yes | Yes | n/a | No | |
 | Hardware inventory & manifest check | BE-T-INV-001 | Yes | Yes | Yes | No | Manifest values for BE-01 are DRAFT |

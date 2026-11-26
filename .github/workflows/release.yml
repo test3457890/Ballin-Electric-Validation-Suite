@@ -1,0 +1,105 @@
+# Development (alpha) builds. Triggered by pushing a tag such as
+# v0.1.0-alpha, or manually. Produces an UNSIGNED Windows x64 portable ZIP
+# (MSVC toolchain, static CRT) and a Linux x86_64 tarball, with SHA-256
+# checksums, and publishes them as a GitHub *prerelease*. These builds are
+# not production releases and are not code-signed.
+name: release
+on:
+  push:
+    tags: ["v*"]
+    # Build-and-package verification (no publishing) for release branches.
+    branches: ["release/**", "milestone-2-windows-build"]
+  workflow_dispatch:
+permissions:
+  contents: write
+env:
+  CARGO_TERM_COLOR: never
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+        working-directory: Ballin Electric Validation Suite
+    env:
+      # Statically link the MSVC C runtime (Rust, FLTK C++ and SQLite C code)
+      # so no Visual C++ Redistributable is required. Do not pass --target:
+      # build scripts must see the same flags.
+      RUSTFLAGS: -C target-feature=+crt-static
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.0"
+      - name: Test before packaging
+        run: ../.github/ci/step.sh test cargo test --workspace --locked
+      - name: Build release executables
+        run: ../.github/ci/step.sh build cargo build --release --locked -p be-cli -p be-gui -p be-worker
+      - name: Verify no MSVC runtime DLL dependency
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Where-Object { $_.FullName -match 'Hostx64\\x64' } | Select-Object -First 1
+          foreach ($exe in 'bevalidate.exe','bevalidate-gui.exe','bevalidate-worker.exe') {
+            $deps = & $dumpbin.FullName /dependents "target\release\$exe" | Out-String
+            Write-Host "== $exe"; Write-Host $deps
+            if ($deps -match '(?i)vcruntime|msvcp|api-ms-win-crt') { Write-Host "::error::$exe depends on the MSVC runtime DLLs"; exit 1 }
+          }
+      - name: Smoke test release build
+        run: |
+          target/release/bevalidate.exe inventory
+          target/release/bevalidate.exe tests list
+          set +e; target/release/bevalidate.exe --db "$RUNNER_TEMP/r.db" run --profile quick --output "$RUNNER_TEMP/q"; c=$?; set -e
+          echo "quick exit $c"; test $c -le 2
+          timeout 120 target/release/bevalidate-gui.exe --db "$RUNNER_TEMP/g.db" --exit-after 6
+      - name: Package portable ZIP
+        shell: pwsh
+        run: ./packaging/windows/build-release.ps1 -NoBuild -Label "${{ github.ref_name }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-portable
+          path: |
+            Ballin Electric Validation Suite/dist/*.zip
+            Ballin Electric Validation Suite/dist/*.sha256
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: Ballin Electric Validation Suite
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update && sudo apt-get install -y cmake libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libfontconfig-dev libpango1.0-dev libcairo2-dev libglu1-mesa-dev
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.97.0"
+      - name: Build and package
+        run: ../.github/ci/step.sh package ./packaging/linux/build-release.sh "${{ github.ref_name }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: |
+            Ballin Electric Validation Suite/dist/*.tar.gz
+            Ballin Electric Validation Suite/dist/*.deb
+            Ballin Electric Validation Suite/dist/*.sha256
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          sha256sum *.zip *.tar.gz *.deb 2>/dev/null > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          notes="$GITHUB_WORKSPACE/Ballin Electric Validation Suite/docs/release-notes/${GITHUB_REF_NAME}.md"
+          gh release create "$GITHUB_REF_NAME" --prerelease --title "BE Validation $GITHUB_REF_NAME (development build, not for production use)" --notes-file "$notes" ./*

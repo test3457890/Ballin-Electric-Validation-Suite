@@ -2,7 +2,7 @@
 
 Rust-first OEM hardware diagnostics, stability testing, factory burn-in, fault isolation and manufacturing quality assurance.
 
-Status: **early development build (engine 0.1.0).** Milestones 0–2 are implemented, and Milestones 3–5 are partial. Everything is tested with fixtures and run live only on a cloud Linux development VM. **No feature has been validated on physical BE-01 hardware, on any physical workstation, or on Windows.** No hardware certifications are implied. See [Development Status](docs/Development%20Status.md) and the [Capability Matrix](docs/Capability%20Matrix.md).
+Status: **early development build (engine 0.1.0).** Milestones 0–2 are implemented, and Milestones 3–5 are partial. Everything is tested with fixtures, run live on a cloud Linux development VM, and run in CI on Linux and Windows (MSVC) GitHub runners, which are virtual machines. **No feature has been validated on physical BE-01 hardware or on any physical workstation.** Development builds: see the [Windows development build guide](docs/Windows%20Development%20Build.md) and [CHANGELOG](CHANGELOG.md). No hardware certifications are implied. See [Development Status](docs/Development%20Status.md) and the [Capability Matrix](docs/Capability%20Matrix.md).
 
 ## Start here
 

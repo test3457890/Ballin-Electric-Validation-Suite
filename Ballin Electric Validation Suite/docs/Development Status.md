@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-25 · Branch `milestone-0-1-foundation` · Engine 0.1.0 · Result schema 1 · DB schema 1
 
-**Bottom line:** The foundation, Linux diagnostics, the supervised worker engine, manufacturing records and both front ends are implemented. They are tested with fixtures and run live on a cloud Linux VM. **Nothing has been validated on physical BE-01 hardware, on any physical workstation, or on Windows.** No high-load test has been executed anywhere. GPU compute, VRAM and graphics workloads are not implemented and honestly report UNSUPPORTED.
+**Bottom line:** The foundation, Linux diagnostics, the supervised worker engine, manufacturing records and both front ends are implemented. They are tested with fixtures, run live on a cloud Linux VM, and run in CI on Ubuntu and Windows Server 2022 (MSVC) GitHub runners, which are virtual machines without real sensors or GPUs. **Nothing has been validated on physical BE-01 hardware or on any physical workstation.** No high-load test has been executed anywhere. GPU compute, VRAM and graphics workloads are not implemented and honestly report UNSUPPORTED.
 
 Definitions used below: *fixture-tested* means simulated inputs in automated tests. *Live (dev VM)* means it executed against the real OS interfaces of the development VM. *Physically verified* means it was confirmed on real target hardware; nothing is in that category yet.
 
@@ -15,7 +15,7 @@ Definitions used below: *fixture-tested* means simulated inputs in automated tes
 | 2 Stability engine and supervision | **Implemented; fixture-tested** | Isolated workers, scheduler with prerequisites, cancellation, timeouts, heartbeat watchdog, process-group kill, safety preflight, sensor watchdog, failure preservation. Tests cover mismatch, crash, hang/timeout, heartbeat loss, stop, uncooperative stop, missing sensor, simulated over-temperature and oversized IPC. CPU/RAM stress workloads exist but have **not** been run under load (not authorized; no approved safety profile). |
 | 3 GPU and system validation | **Partial** | GPU inventory (PCI, NVML runtime-loaded, amdgpu sysfs), PCIe link/AER review, combined CPU+RAM load. **Not implemented:** GPU compute kernels, VRAM tests, graphics workload, simultaneous multi-GPU runs, instrument interfaces. No GPU hardware was available. |
 | 4 Manufacturing and service workflow | **Implemented; fixture-tested and live in CLI/GUI** | Units, versioned profiles, manual checklist sign-off, fault catalog, waivers (restricted), hold/rework, linked rework runs, service records, preserved baselines plus comparison, release policy, authorized approval, audit trail, HTML/JSON/CSV reports, customer redaction, backup and interrupted-run recovery. Tests prove failed, incomplete, unsupported, fixture and diagnostic-profile results block release. Native PDF not implemented. |
-| 5 Cross-platform packaging and customer diagnostics | **Partial** | Industrial, Classic and Dark themes; zoom; redacted support bundle; packaging scripts (unsigned); Windows cross-compilation verified. **Not done:** installers, signing, Windows execution, accessibility testing with assistive technology, customer mode with restricted permissions. |
+| 5 Cross-platform packaging and customer diagnostics | **Partial** | Industrial, Classic and Dark themes; zoom; redacted support bundle; unsigned Windows portable ZIP and Linux tar.gz/.deb development builds via the release workflow; CI tests and GUI/CLI smoke runs on Windows Server 2022 (MSVC). **Not done:** installer, signing, physical Windows workstation testing, accessibility testing with assistive technology, customer mode with restricted permissions. |
 | 6 Preboot and advanced factory operation | **Not started** | — |
 
 ## Commands executed and actual results (2026-11-25, dev VM)
@@ -27,7 +27,8 @@ Environment: Ubuntu 24.04.5 LTS, kernel 6.18.44, Intel Xeon (virtualized, 4 vCPU
 | `cargo fmt --all -- --check` | Clean |
 | `cargo clippy --workspace --all-targets` | 0 warnings |
 | `cargo test --workspace` | **91 passed, 0 failed.** Crate breakdown: be-core 23, be-diagnostics 22, be-platform 7, be-safety 3, be-storage 6, be-reporting 3, be-engine 3; be-worker integration 13 supervision + 6 engine end-to-end; be-cli 5 contract tests. |
-| `cargo build --release --target x86_64-pc-windows-gnu -p be-gui -p be-cli -p be-worker` | Builds `bevalidate.exe`, `bevalidate-gui.exe` and `bevalidate-worker.exe`. **Not executed on Windows.** |
+| `cargo build --release --target x86_64-pc-windows-gnu -p be-gui -p be-cli -p be-worker` | Builds `bevalidate.exe`, `bevalidate-gui.exe` and `bevalidate-worker.exe` (MinGW cross-check). |
+| GitHub CI at `098052f` (PR #2 merge candidate) | **All green.** Ubuntu 24.04 and Windows Server 2022 (MSVC): fmt, clippy `-D warnings`, all tests, GUI smoke start and CLI Quick-profile smoke run. Audit job: cargo-deny and cargo-audit pass. The runners are VMs: no sensors, GPUs or physical hardware. |
 | `bevalidate inventory` / `capabilities` | Live. CPU, memory, 6 virtio disks, 11 PCI functions and eth0 detected. DMI, cpufreq, ECC, Secure Boot and all sensors reported **unavailable** with reasons. |
 | `bevalidate run --profile quick --unit DEV-VM-0001 --output …` | Live, 19.5 s, exit 2 (INCONCLUSIVE). INV-001 PASS; SNS-001 WARNING (BE-SNS-002, no temperature telemetry); CPU-001 PASS (4 pinned threads, 44 Lucas-Lehmer verifications); MEM-001 PASS (256 MiB, 335,544,320 words verified, 0 mismatches); STO-001 PASS (128 MiB scratch, SHA-256 verified); OS-001 INCONCLUSIVE (BE-OS-002, journal has no kernel log); STO-002, PCIE-001, GPU-001 UNSUPPORTED; NET-001 PASS; FW-001 WARNING (no TPM). Release policy: **not eligible** (correct). |
 | `bevalidate-gui --autorun quick` (Xvfb) | Same engine path; run persisted; screenshots reviewed against the approved design reference. |
@@ -56,7 +57,7 @@ Environment: Ubuntu 24.04.5 LTS, kernel 6.18.44, Intel Xeon (virtualized, 4 vCPU
 6. SMART/NVMe health via smartctl on actual NVMe devices.
 7. Hardware error log review with real MCE, AER or EDAC events (known-fault fixtures or controlled conditions).
 8. GUI on physical dual 4K displays, Windows per-monitor DPI, and keyboard-only operation by an operator.
-9. Windows execution of all three executables (never run).
+9. All three executables on a physical Windows workstation. So far they have run only on CI virtual machines.
 
 ## Open decisions (owner / engineering)
 

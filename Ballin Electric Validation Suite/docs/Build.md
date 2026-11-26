@@ -14,7 +14,7 @@ sudo apt-get install -y build-essential cmake pkg-config libx11-dev libxext-dev 
 
 Optional at runtime: `smartmontools` (BE-T-STO-002), the NVIDIA driver (NVML telemetry), and `journalctl` access through the `adm` or `systemd-journal` group (BE-T-OS-001).
 
-**Windows:** install Visual Studio Build Tools (C++ workload) and CMake, then run the standard `cargo build`. A MinGW cross-build from Linux was verified to compile (see below), but neither build has been executed on Windows.
+**Windows:** install Visual Studio 2022 Build Tools ("Desktop development with C++") and CMake, then run the standard `cargo build`. CI builds and tests on GitHub's `windows-2022` runners with MSVC. For downloadable builds the release workflow sets `RUSTFLAGS=-C target-feature=+crt-static` (no `--target` flag), so the Rust, FLTK and SQLite code links the C runtime statically, and checks with `dumpbin /dependents` that no MSVC runtime DLL is required.
 
 ## Commands
 
@@ -69,3 +69,38 @@ GUI options for automation and screenshots: `--db PATH`, `--theme industrial|cla
 - a small number of low-impact live checks: CPU known-answer with 2 threads and small exponents, and a 16 MiB memory pattern.
 
 No stress test runs in automated testing. High-load tests only run with `--authorize-high-load` and an approved safety profile.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main`, `milestone-*` and `feature-*` branches and on pull requests. It covers Ubuntu 24.04 and Windows Server 2022 (MSVC):
+
+- format check;
+- clippy with `-D warnings`;
+- `cargo test --workspace --locked`;
+- a build of all executables;
+- a GUI smoke start (Xvfb on Linux);
+- a CLI smoke run of the Quick profile.
+
+A separate job runs `cargo deny check` and `cargo audit`. When a step fails, `.github/ci/step.sh` publishes the tail of its output as a check-run annotation.
+
+## Development builds (downloads)
+
+`.github/workflows/release.yml` runs when a `v*` tag is pushed (for example `v0.1.0-alpha`). It:
+
+1. runs the tests on Windows;
+2. builds the release executables with MSVC and a static CRT;
+3. checks DLL dependencies and smoke-tests the GUI and CLI;
+4. packages the Windows portable ZIP (`packaging/windows/build-release.ps1`) and the Linux tar.gz and .deb (`packaging/linux/build-release.sh`);
+5. publishes everything as a GitHub **prerelease** with `SHA256SUMS.txt`.
+
+The builds are **unsigned development builds**; see [Windows Development Build](Windows%20Development%20Build.md).
+
+Local packaging:
+
+```bash
+./packaging/linux/build-release.sh v0.1.0-dev
+```
+
+```powershell
+.\packaging\windows\build-release.ps1 -Label v0.1.0-dev
+```

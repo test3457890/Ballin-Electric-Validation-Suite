@@ -6,7 +6,7 @@
 
 Professional hardware diagnostics, stability testing, factory burn-in and manufacturing quality assurance.
 
-[Interface preview](#interface-preview) · [Screenshots](#application-screenshots) · [Capabilities](#planned-capabilities) · [Factory workflow](#factory-workflow) · [Development documentation](#development-documentation)
+[Interface preview](#interface-preview) · [Screenshots](#application-screenshots) · [Download](#download-development-builds) · [Capabilities](#planned-capabilities) · [Factory workflow](#factory-workflow) · [Development documentation](#development-documentation)
 
 > Development project. This repository contains the product specification, the approved interface concept and an early Rust implementation (engine 0.1.0) that has been tested with fixtures and on a cloud Linux development VM only. The capabilities below are development targets, not claims of a released or physically validated application. Consult the development status document and capability matrix for implementation evidence.
 
@@ -35,6 +35,16 @@ Genuine screenshots of the running application. Build: BE Validation 0.1.0 (deve
 | ![Tests tab after a live Quick Diagnostics run](Ballin%20Electric%20Validation%20Suite/docs/screenshots/v0.1.0-linux-devvm-tests.png) | ![Errors tab with fault-code details](Ballin%20Electric%20Validation%20Suite/docs/screenshots/v0.1.0-linux-devvm-errors.png) |
 | **Manufacturing records and disposition history** | **Dark theme, capability registry** |
 | ![Manufacturing tab with unit record and disposition history](Ballin%20Electric%20Validation%20Suite/docs/screenshots/v0.1.0-linux-devvm-mfg.png) | ![Overview tab in the Dark theme with capability states](Ballin%20Electric%20Validation%20Suite/docs/screenshots/v0.1.0-linux-devvm-dark.png) |
+
+## Download (development builds)
+
+Development builds are published as GitHub **prereleases** (see the repository's *Releases* page; the first is `v0.1.0-alpha`):
+
+- **Windows x64 portable ZIP**: desktop application, command line and isolated diagnostic worker. No installation or Visual C++ runtime required.
+- **Linux x86_64**: tar.gz and `.deb` packages.
+- **SHA-256 checksums** for every file.
+
+These are **unsigned development builds, not production releases**, and have not been validated on physical BE-01 hardware. Read [Windows installation and operation](Ballin%20Electric%20Validation%20Suite/docs/Windows%20Development%20Build.md), the [physical hardware testing guide](Ballin%20Electric%20Validation%20Suite/docs/Physical%20Hardware%20Testing%20Guide.md) and the [known limitations and troubleshooting](Ballin%20Electric%20Validation%20Suite/docs/Known%20Limitations%20and%20Troubleshooting.md) before use. Changes are tracked in the [changelog](Ballin%20Electric%20Validation%20Suite/CHANGELOG.md).
 
 ## Planned capabilities
 
