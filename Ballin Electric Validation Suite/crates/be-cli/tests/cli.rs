@@ -46,7 +46,7 @@ fn inventory_and_capabilities_json() {
     let caps: Vec<serde_json::Value> = serde_json::from_slice(&o.stdout).unwrap();
     assert!(
         caps.iter()
-            .any(|c| c["id"] == "gpu.compute" && c["state"] == "planned")
+            .any(|c| c["id"] == "gpu.cuda" && c["state"] == "planned")
     );
 }
 

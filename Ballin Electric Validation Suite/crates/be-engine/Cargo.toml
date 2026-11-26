@@ -10,6 +10,7 @@ publish.workspace = true
 be-core.workspace = true
 be-platform.workspace = true
 be-diagnostics.workspace = true
+be-gpu.workspace = true
 be-safety.workspace = true
 be-storage.workspace = true
 serde_json.workspace = true

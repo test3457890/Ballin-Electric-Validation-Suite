@@ -1,0 +1,22 @@
+#version 450
+// Deterministic integer + exact-float workload with a CPU-computable known
+// answer (see src/reference.rs). Original code.
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Out { uint data[]; };
+layout(push_constant) uniform PC { uint seed; uint iterations; uint count; uint pad; } pc;
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.count) return;
+    uint x = idx ^ pc.seed;
+    for (uint i = 0u; i < pc.iterations; i++) {
+        x = x * 1664525u + 1013904223u;
+        x ^= (x >> 13);
+    }
+    // Small integers are exactly representable: FMA chain has an exact result.
+    float f = float(idx & 0xFFFu);
+    float acc = 0.0;
+    for (uint k = 0u; k < 16u; k++) {
+        acc = fma(f, float(k + 1u), acc);
+    }
+    data[idx] = x ^ floatBitsToUint(acc);
+}

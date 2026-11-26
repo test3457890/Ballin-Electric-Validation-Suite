@@ -149,6 +149,147 @@ pub fn nvml_sensors() -> Vec<SensorReading> {
     Vec::new()
 }
 
+/// Point-in-time GPU status from a vendor interface. `None` fields are
+/// unavailable (never zero-filled).
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct GpuStatus {
+    pub source: String,
+    pub temperature_c: Option<f64>,
+    pub power_w: Option<f64>,
+    pub power_limit_w: Option<f64>,
+    pub sm_clock_mhz: Option<f64>,
+    pub max_sm_clock_mhz: Option<f64>,
+    pub utilization_pct: Option<f64>,
+    /// Active clock-throttle reasons reported by the driver.
+    pub throttle_reasons: Vec<String>,
+    /// PCIe replay counter (link-level retransmissions) where supported.
+    pub pcie_replay_count: Option<u64>,
+}
+
+/// NVIDIA status by PCI address (`0000:01:00.0`). `None` if NVML or the
+/// device is unavailable.
+pub fn nvml_status(pci_address: &str) -> Option<GpuStatus> {
+    #[cfg(feature = "nvml")]
+    {
+        use nvml_wrapper::bitmasks::device::ThrottleReasons;
+        use nvml_wrapper::enum_wrappers::device::{Clock, TemperatureSensor};
+        with_nvml(|nvml| {
+            let dev = nvml.device_by_pci_bus_id(pci_address).ok()?;
+            let reasons = dev.current_throttle_reasons().ok();
+            let mut names = Vec::new();
+            if let Some(r) = reasons {
+                for (flag, name) in [
+                    (ThrottleReasons::SW_POWER_CAP, "software power cap"),
+                    (ThrottleReasons::HW_SLOWDOWN, "hardware slowdown"),
+                    (
+                        ThrottleReasons::SW_THERMAL_SLOWDOWN,
+                        "software thermal slowdown",
+                    ),
+                    (
+                        ThrottleReasons::HW_THERMAL_SLOWDOWN,
+                        "hardware thermal slowdown",
+                    ),
+                    (
+                        ThrottleReasons::HW_POWER_BRAKE_SLOWDOWN,
+                        "hardware power brake",
+                    ),
+                    (ThrottleReasons::SYNC_BOOST, "sync boost"),
+                ] {
+                    if r.contains(flag) {
+                        names.push(name.to_string());
+                    }
+                }
+            }
+            Some(GpuStatus {
+                source: "NVML".into(),
+                temperature_c: dev
+                    .temperature(TemperatureSensor::Gpu)
+                    .ok()
+                    .map(|t| t as f64),
+                power_w: dev.power_usage().ok().map(|mw| mw as f64 / 1000.0),
+                power_limit_w: dev.enforced_power_limit().ok().map(|mw| mw as f64 / 1000.0),
+                sm_clock_mhz: dev.clock_info(Clock::SM).ok().map(|c| c as f64),
+                max_sm_clock_mhz: dev.max_clock_info(Clock::SM).ok().map(|c| c as f64),
+                utilization_pct: dev.utilization_rates().ok().map(|u| u.gpu as f64),
+                throttle_reasons: names,
+                pcie_replay_count: dev.pcie_replay_counter().ok().map(|c| c as u64),
+            })
+        })
+        .flatten()
+    }
+    #[cfg(not(feature = "nvml"))]
+    {
+        let _ = pci_address;
+        None
+    }
+}
+
+/// AMD (amdgpu) status from sysfs/hwmon on Linux. `None` if unavailable.
+pub fn amdgpu_status(pci_address: &str) -> Option<GpuStatus> {
+    #[cfg(target_os = "linux")]
+    {
+        let base = std::path::PathBuf::from(format!("/sys/bus/pci/devices/{pci_address}"));
+        if !base.join("gpu_busy_percent").exists() && !base.join("pp_dpm_sclk").exists() {
+            return None;
+        }
+        let read = |p: &std::path::Path| {
+            std::fs::read_to_string(p)
+                .ok()
+                .map(|s| s.trim().to_string())
+        };
+        let hw = std::fs::read_dir(base.join("hwmon"))
+            .ok()
+            .and_then(|mut d| d.next())
+            .and_then(|e| e.ok())
+            .map(|e| e.path());
+        let hwv = |f: &str, scale: f64| {
+            hw.as_ref()
+                .and_then(|h| read(&h.join(f)))
+                .and_then(|v| v.parse::<f64>().ok())
+                .map(|v| v * scale)
+        };
+        // pp_dpm_sclk lines look like "1: 1800Mhz *" (current level marked).
+        let sclk = read(&base.join("pp_dpm_sclk")).unwrap_or_default();
+        let parse_mhz = |l: &str| {
+            l.split_whitespace().nth(1).and_then(|v| {
+                v.trim_end_matches("Mhz")
+                    .trim_end_matches("MHz")
+                    .parse::<f64>()
+                    .ok()
+            })
+        };
+        let cur = sclk
+            .lines()
+            .find(|l| l.trim_end().ends_with('*'))
+            .and_then(parse_mhz);
+        let max = sclk
+            .lines()
+            .filter_map(parse_mhz)
+            .fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.max(v))));
+        Some(GpuStatus {
+            source: "amdgpu sysfs".into(),
+            temperature_c: hwv("temp1_input", 1e-3),
+            power_w: hwv("power1_average", 1e-6).or_else(|| hwv("power1_input", 1e-6)),
+            power_limit_w: hwv("power1_cap", 1e-6),
+            sm_clock_mhz: cur,
+            max_sm_clock_mhz: max,
+            utilization_pct: read(&base.join("gpu_busy_percent")).and_then(|v| v.parse().ok()),
+            throttle_reasons: Vec::new(),
+            pcie_replay_count: None,
+        })
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = pci_address;
+        None
+    }
+}
+
+/// Best available vendor status for a GPU at `pci_address`.
+pub fn gpu_status(pci_address: &str) -> Option<GpuStatus> {
+    nvml_status(pci_address).or_else(|| amdgpu_status(pci_address))
+}
+
 /// NVML reports `00000000:01:00.0`; sysfs uses `0000:01:00.0`.
 pub fn normalize_bus_id(s: &str) -> String {
     let s = s.trim().to_ascii_lowercase();

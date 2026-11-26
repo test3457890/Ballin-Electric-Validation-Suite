@@ -302,3 +302,60 @@ fn live_known_answer_test_runs_in_worker() {
     assert_eq!(r.provenance, Provenance::Live);
     assert_eq!(r.status, TestStatus::Pass, "{r:?}");
 }
+
+/// GPU tests through the real worker. Needs a Vulkan implementation; CI
+/// installs Mesa lavapipe (a SOFTWARE device, so `include_software` is set
+/// and results describe the code path, not GPU hardware).
+#[test]
+fn gpu_tests_run_in_worker_on_available_vulkan_device() {
+    let devices = match be_gpu::enumerate() {
+        Ok(d) if !d.is_empty() => d,
+        other => {
+            eprintln!(
+                "SKIPPED: no Vulkan device ({:?})",
+                other.map(|d| d.len()).map_err(|e| e.to_string())
+            );
+            return;
+        }
+    };
+    let mut c = cfg(120_000);
+    c.fixture_mode = false;
+    let (r, _) = run(
+        &c,
+        "BE-T-GPU-002",
+        json!({"elements": 65536, "iterations": 32, "rounds": 2, "include_software": true}),
+        &AtomicBool::new(false),
+    );
+    assert_eq!(r.status, TestStatus::Pass, "{r:?}");
+    let (r, _) = run(
+        &c,
+        "BE-T-GPU-003",
+        json!({"size_mib": 16, "include_software": true}),
+        &AtomicBool::new(false),
+    );
+    assert_eq!(r.status, TestStatus::Pass, "{r:?}");
+    if devices.iter().all(|d| d.software) {
+        // Default selection excludes software devices: never a hardware pass.
+        let (r, _) = run(&c, "BE-T-GPU-002", json!({}), &AtomicBool::new(false));
+        assert_eq!(r.status, TestStatus::Unsupported);
+        assert_eq!(r.first_fault_code(), Some("BE-GPU-002"));
+    }
+    // High-load graphics stress is refused without authorization.
+    let (r, _) = run(
+        &c,
+        "BE-T-GPU-004",
+        json!({"duration_s": 1, "include_software": true}),
+        &AtomicBool::new(false),
+    );
+    assert_eq!(r.status, TestStatus::NotRun);
+    let mut auth = cfg(120_000);
+    auth.fixture_mode = false;
+    auth.high_load_authorized = true;
+    let (r, _) = run(
+        &auth,
+        "BE-T-GPU-004",
+        json!({"duration_s": 2, "width": 160, "height": 120, "layers": 4, "frames_per_submit": 2, "verify_every": 2, "include_software": true}),
+        &AtomicBool::new(false),
+    );
+    assert_eq!(r.status, TestStatus::Pass, "{r:?}");
+}
