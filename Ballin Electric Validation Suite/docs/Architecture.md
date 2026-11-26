@@ -45,7 +45,7 @@ No cyclic dependencies. The production path never reaches fixture code: fixture 
 | ADR-7 | Results, baselines and the audit log are immutable (SQLite triggers); rework creates a new linked run | Auditability | Accepted |
 | ADR-8 | Windows inventory uses documented CIM classes through in-box PowerShell (`Get-CimInstance ... | ConvertTo-Json`) instead of COM bindings | Avoids large unsafe FFI in the first release; parsing is fixture-tested | Accepted provisionally; native `windows`/`wmi` backend may replace it |
 | ADR-9 | SMART/NVMe health via an installed `smartctl` (separate process, JSON output), never bundled | smartmontools is GPL-2.0; invocation of a separately installed tool does not link it | Accepted; see Third Party Notices |
-| ADR-10 | GPU compute, VRAM and graphics workloads are not yet implemented and report UNSUPPORTED (BE-GPU-001) | No verified backend yet; never fake results | Open: Vulkan compute via `ash` is the leading candidate (Milestone 3) |
+| ADR-10 | GPU workloads use a Vulkan backend (`be-gpu`, `ash` with the runtime-loaded loader) and GLSL shaders committed as validated SPIR-V. Software Vulkan devices are excluded by default. All raw Vulkan calls are in `be-gpu/src/vk.rs`. | Vendor-neutral (NVIDIA, AMD, Intel); no SDK is bundled; a missing driver means UNSUPPORTED instead of a crash | Accepted. CUDA and HIP adapters can be added behind the same `be-gpu` API |
 | ADR-11 | No native PDF generation; HTML reports are print-ready | Avoid unreviewed PDF library licenses | Open |
 | ADR-12 | Unsafe code is limited to small documented modules: volatile memory access, thread affinity, statvfs, posix_fadvise, process-group kill, prctl, geteuid, SIGINT handler | Spec §6 | Accepted |
 

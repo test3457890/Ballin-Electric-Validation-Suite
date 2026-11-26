@@ -17,6 +17,9 @@ Reference product names (Prime95, FurMark, OCCT, PC-Doctor, PassMark, HWiNFO, AI
 
 | Software | Use | License | Status |
 | --- | --- | --- | --- |
+| Vulkan loader and GPU vendor Vulkan drivers (ICDs) | Loaded at runtime by `ash` (`loaded` feature, via libloading) for GPU tests | Loader: Apache-2.0 (Khronos). Drivers: vendor terms. | Not bundled or redistributed. A missing loader is reported as UNSUPPORTED. |
+| glslang (`glslangValidator`), SPIRV-Tools (`spirv-val`) | Development-time only: compile the original GLSL in `crates/be-gpu/shaders` to the SPIR-V that is committed and embedded | glslang: BSD-3-Clause and others; SPIRV-Tools: Apache-2.0 | Not shipped. The output SPIR-V is compiled from our own shader source. |
+| Mesa lavapipe (llvmpipe Vulkan) | CI and development testing only (a software Vulkan device) | MIT | Not shipped. Results on it never count as GPU hardware evidence. |
 | NVIDIA Management Library (NVML) | Loaded at runtime from the installed NVIDIA driver via `nvml-wrapper` (MIT/Apache-2.0) | NVIDIA proprietary (driver EULA) | Not redistributed. Use is subject to the end user's installed driver terms. The wrapper license does not grant rights to NVML. |
 | smartmontools `smartctl` | Optional; invoked as a separate process for JSON SMART output (BE-T-STO-002) | GPL-2.0-or-later | Not bundled or linked. If a future installer bundles smartctl, GPL distribution obligations apply (source offer) and require review. |
 | systemd `journalctl` | Invoked to read the kernel log (BE-T-OS-001) | LGPL-2.1+ | OS component, not bundled. |
@@ -24,11 +27,11 @@ Reference product names (Prime95, FurMark, OCCT, PC-Doctor, PassMark, HWiNFO, AI
 
 ## Rust crate dependencies
 
-78 third-party crates are compiled into at least one target (runtime and build dependencies, all platforms; dev-only test crates excluded). License expressions as declared by each crate:
+79 third-party crates are compiled into at least one target (runtime and build dependencies, all platforms; dev-only test crates excluded). License expressions as declared by each crate:
 
 | Count | License expression |
 | --- | --- |
-| 52 | MIT OR Apache-2.0 |
+| 53 | MIT OR Apache-2.0 |
 | 14 | MIT |
 | 6 | MIT/Apache-2.0 |
 | 1 | Apache-2.0 / MIT |
@@ -48,6 +51,7 @@ No copyleft (GPL/LGPL/MPL/AGPL) or unlicensed crates were found. All are permiss
 | anstyle-query | 1.1.5 | MIT OR Apache-2.0 |
 | anstyle-wincon | 3.0.11 | MIT OR Apache-2.0 |
 | anyhow | 1.0.105 | MIT OR Apache-2.0 |
+| ash | 0.38.0+1.3.281 | MIT OR Apache-2.0 |
 | bitflags | 2.13.2 | MIT OR Apache-2.0 |
 | block-buffer | 0.10.4 | MIT OR Apache-2.0 |
 | cc | 1.11.3 | MIT OR Apache-2.0 |
@@ -105,10 +109,10 @@ No copyleft (GPL/LGPL/MPL/AGPL) or unlicensed crates were found. All are permiss
 | sqlite-wasm-rs | 0.6.3 | MIT |
 | static_assertions | 1.1.0 | MIT OR Apache-2.0 |
 | strsim | 0.11.1 | MIT |
-| syn | 3.0.10 | MIT OR Apache-2.0 |
 | syn | 2.0.119 | MIT OR Apache-2.0 |
-| thiserror | 2.0.21 | MIT OR Apache-2.0 |
+| syn | 3.0.10 | MIT OR Apache-2.0 |
 | thiserror | 1.0.69 | MIT OR Apache-2.0 |
+| thiserror | 2.0.21 | MIT OR Apache-2.0 |
 | thiserror-impl | 2.0.21 | MIT OR Apache-2.0 |
 | thiserror-impl | 1.0.69 | MIT OR Apache-2.0 |
 | typenum | 1.20.1 | MIT OR Apache-2.0 |

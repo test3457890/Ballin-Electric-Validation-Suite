@@ -5,7 +5,7 @@
    - memory buffers are capped at 50% of available memory;
    - scratch files require 1 GiB plus 10% free-space headroom and are always deleted.
 2. **No destructive operations.** The release contains no raw disk writes, formatting, firmware flashing, overclocking, voltage or power-limit changes, or security-setting changes. Descriptors with `destructive: true` are refused by preflight.
-3. **High-load gating.** Tests with load class `high` (`BE-T-CPU-STRESS`, `BE-T-MEM-STRESS`, `BE-T-SYS-001` and the planned `BE-T-GPU-004`) require all of the following:
+3. **High-load gating.** Tests with load class `high` (`BE-T-CPU-STRESS`, `BE-T-MEM-STRESS`, `BE-T-SYS-001` and `BE-T-GPU-004`) require all of the following:
    - explicit operator authorization (GUI: *Tests ▸ Authorize High-Load Testing*; CLI: `--authorize-high-load`);
    - a hardware safety profile with `"approved": true` and a named `approved_by`;
    - every `required` sensor rule matching a sensor that currently reports a value;

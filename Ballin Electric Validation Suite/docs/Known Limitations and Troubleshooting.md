@@ -6,7 +6,9 @@
 - No validation on physical BE-01 hardware or any physical workstation. Windows builds are tested only on GitHub CI runners (Windows Server 2022, virtual machines without real sensors or GPUs).
 
 **GPU**
-- GPU compute, VRAM and graphics stress (FurMark-style) tests are not implemented in this build. They report UNSUPPORTED, which blocks release under the Standard and Factory profiles.
+- GPU tests need a Vulkan driver. They were developed and tested on Mesa lavapipe, a CPU-emulated device, and have **not been run on real NVIDIA, AMD or Intel GPUs**. Software Vulkan devices are excluded by default, so on machines without a GPU driver the GPU tests report UNSUPPORTED, which blocks release under the Standard and Factory profiles.
+- VRAM coverage is limited to memory the driver allows the process to allocate (at most 50% of the device-local heap). ECC counters are not read yet.
+- Intel GPU telemetry is not implemented; NVIDIA uses NVML and AMD uses amdgpu sysfs on Linux.
 
 **Stress testing**
 - Stress tests cannot run without an approved, device-specific safety profile. None ships.

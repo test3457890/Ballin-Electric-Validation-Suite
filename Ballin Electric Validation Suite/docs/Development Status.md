@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-25 · Branch `milestone-0-1-foundation` · Engine 0.1.0 · Result schema 1 · DB schema 1
 
-**Bottom line:** The foundation, Linux diagnostics, the supervised worker engine, manufacturing records and both front ends are implemented. They are tested with fixtures, run live on a cloud Linux VM, and run in CI on Ubuntu and Windows Server 2022 (MSVC) GitHub runners, which are virtual machines without real sensors or GPUs. **Nothing has been validated on physical BE-01 hardware or on any physical workstation.** No high-load test has been executed anywhere. GPU compute, VRAM and graphics workloads are not implemented and honestly report UNSUPPORTED.
+**Bottom line:** The foundation, Linux diagnostics, the supervised worker engine, manufacturing records and both front ends are implemented. They are tested with fixtures, run live on a cloud Linux VM, and run in CI on Ubuntu and Windows Server 2022 (MSVC) GitHub runners, which are virtual machines without real sensors or GPUs. **Nothing has been validated on physical BE-01 hardware or on any physical workstation.** No high-load test has been executed anywhere. The Vulkan GPU engine (compute known-answer, VRAM patterns, graphics stress) has been tested only on a software Vulkan device (Mesa lavapipe), not on GPU hardware.
 
 Definitions used below: *fixture-tested* means simulated inputs in automated tests. *Live (dev VM)* means it executed against the real OS interfaces of the development VM. *Physically verified* means it was confirmed on real target hardware; nothing is in that category yet.
 
@@ -13,7 +13,7 @@ Definitions used below: *fixture-tested* means simulated inputs in automated tes
 | 0 Foundation and approved interface | **Implemented** | Cargo workspace (10 crates), pinned toolchain, FLTK-rs GUI with the approved industrial layout, CLI, SQLite schema, test contracts, capability registry, architecture record. GUI verified under Xvfb by screenshots and xdotool interaction. |
 | 1 Real low-impact diagnostics | **Implemented (Linux live on VM; Windows fixture-tested only)** | Native Linux inventory and sensors, safe OS log review, SQLite persistence, JSON/CSV/HTML export, CLI. Known-answer CPU, memory pattern and scratch-integrity tests PASS live on the dev VM. Windows CIM provider fixture-tested and cross-compiled. |
 | 2 Stability engine and supervision | **Implemented; fixture-tested** | Isolated workers, scheduler with prerequisites, cancellation, timeouts, heartbeat watchdog, process-group kill, safety preflight, sensor watchdog, failure preservation. Tests cover mismatch, crash, hang/timeout, heartbeat loss, stop, uncooperative stop, missing sensor, simulated over-temperature and oversized IPC. CPU/RAM stress workloads exist but have **not** been run under load (not authorized; no approved safety profile). |
-| 3 GPU and system validation | **Partial** | GPU inventory (PCI, NVML runtime-loaded, amdgpu sysfs), PCIe link/AER review, combined CPU+RAM load. **Not implemented:** GPU compute kernels, VRAM tests, graphics workload, simultaneous multi-GPU runs, instrument interfaces. No GPU hardware was available. |
+| 3 GPU and system validation | **Implemented; tested on a software Vulkan device only** | Vulkan backend (`be-gpu`, ash): enumeration with PCI address and software-device detection; compute known-answer test; VRAM moving-inversion patterns with fault capture; FurMark-inspired graphics stress with bit-exact reference-frame checks; independent and simultaneous multi-GPU modes; NVML/amdgpu telemetry with throttle and PCIe replay detection; GPU fault codes; supervisor and safety integration. Tested on Mesa lavapipe. **Not done:** physical GPU validation (NVIDIA, AMD, Intel), CUDA/HIP adapters, ECC counters, instrument interfaces, and combined CPU+GPU+RAM load. |
 | 4 Manufacturing and service workflow | **Implemented; fixture-tested and live in CLI/GUI** | Units, versioned profiles, manual checklist sign-off, fault catalog, waivers (restricted), hold/rework, linked rework runs, service records, preserved baselines plus comparison, release policy, authorized approval, audit trail, HTML/JSON/CSV reports, customer redaction, backup and interrupted-run recovery. Tests prove failed, incomplete, unsupported, fixture and diagnostic-profile results block release. Native PDF not implemented. |
 | 5 Cross-platform packaging and customer diagnostics | **Partial** | Industrial, Classic and Dark themes; zoom; redacted support bundle; unsigned Windows portable ZIP and Linux tar.gz/.deb development builds via the release workflow; CI tests and GUI/CLI smoke runs on Windows Server 2022 (MSVC). **Not done:** installer, signing, physical Windows workstation testing, accessibility testing with assistive technology, customer mode with restricted permissions. |
 | 6 Preboot and advanced factory operation | **Not started** | — |
@@ -63,7 +63,7 @@ Environment: Ubuntu 24.04.5 LTS, kernel 6.18.44, Intel Xeon (virtualized, 4 vCPU
 
 - Approved per-device temperature, fan and power limits (safety profiles) and who approves them.
 - BE-01 configuration manifest values (GPU count, link widths, 10GbE) and acceptance thresholds; the factory profile is a DRAFT.
-- GPU backend choice (Vulkan compute via `ash` vs CUDA/HIP) and its license review.
+- Whether CUDA or HIP adapters are wanted in addition to Vulkan (each needs its own SDK license review).
 - Accessibility path if screen-reader support is required (toolkit change needs approval).
 - Project license, code-signing keys and distribution channel.
 - Windows release toolchain (MSVC recommended).
@@ -71,7 +71,7 @@ Environment: Ubuntu 24.04.5 LTS, kernel 6.18.44, Intel Xeon (virtualized, 4 vCPU
 
 ## Next steps
 
-1. Milestone 3: Vulkan compute backend (`ash`) with deterministic known-answer kernels and VRAM pattern tests per device, after license review and with access to GPU hardware.
+1. Run the GPU tests on physical NVIDIA (RTX PRO 6000 Blackwell), AMD (Radeon AI PRO R9700) and Intel GPUs. Then add ECC counters and combined CPU+GPU+RAM load.
 2. Run on a physical Linux workstation with hwmon sensors. Draft a safety profile for engineering approval.
 3. Execute and fix the Windows build on real Windows. Add WHEA log parsing and PCIe link data via SetupAPI.
 4. Customer mode (restricted actions), installer packaging, signed reports.
