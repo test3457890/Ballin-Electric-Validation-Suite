@@ -24,6 +24,10 @@ struct Cli {
     /// SQLite database path (default: per-user data directory, or $BE_VALIDATION_DB)
     #[arg(long, global = true)]
     db: Option<PathBuf>,
+    /// Restricted customer diagnostic mode (also BE_VALIDATION_MODE=customer,
+    /// or always on in builds with the `customer-edition` feature)
+    #[arg(long, global = true)]
+    customer: bool,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -235,6 +239,8 @@ struct RunArgs {
     /// Do not persist to the database
     #[arg(long)]
     no_db: bool,
+    #[arg(skip)]
+    customer: bool,
 }
 
 #[derive(Subcommand)]
@@ -364,8 +370,60 @@ fn store(db: &Option<PathBuf>) -> Result<Store> {
     be_engine::open_store(db.as_deref()).map_err(|e| anyhow!(e))
 }
 
+/// Customer mode: a usability restriction for end-user diagnostics. It is
+/// not a security boundary (a user with file access can run other builds);
+/// factory stations rely on OS accounts and the audit log.
+fn customer_mode(flag: bool) -> bool {
+    cfg!(feature = "customer-edition")
+        || flag
+        || std::env::var("BE_VALIDATION_MODE")
+            .map(|v| v.eq_ignore_ascii_case("customer"))
+            .unwrap_or(false)
+}
+
+fn customer_allows(cmd: &Cmd) -> Result<(), String> {
+    match cmd {
+        Cmd::Inventory { .. }
+        | Cmd::Capabilities { .. }
+        | Cmd::Sensors { .. }
+        | Cmd::Tests { .. }
+        | Cmd::Runs { .. }
+        | Cmd::Analyze { .. }
+        | Cmd::Faults { .. }
+        | Cmd::SupportBundle { .. } => Ok(()),
+        Cmd::Profile {
+            cmd: ProfileCmd::List,
+        } => Ok(()),
+        Cmd::Report { .. } => Ok(()),
+        Cmd::Run(a) => {
+            if a.profile != "quick" {
+                return Err(
+                    "customer mode runs only the built-in Quick Diagnostics profile".into(),
+                );
+            }
+            if a.authorize_high_load
+                || a.safety_profile.is_some()
+                || a.fixture_mode
+                || a.unit.is_some()
+                || a.rework_of.is_some()
+            {
+                return Err("customer mode does not allow high-load authorization, fixtures or manufacturing records".into());
+            }
+            Ok(())
+        }
+        _ => {
+            Err("this command is not available in customer mode (factory/service function)".into())
+        }
+    }
+}
+
 fn dispatch(cli: Cli) -> Result<i32> {
     let db = cli.db.clone();
+    let customer = customer_mode(cli.customer);
+    if customer && let Err(e) = customer_allows(&cli.cmd) {
+        eprintln!("Not permitted: {e}.");
+        return Ok(exit::NOT_AUTHORIZED);
+    }
     match cli.cmd {
         Cmd::Inventory { format } => {
             let inv = be_platform::native().inventory();
@@ -488,7 +546,10 @@ fn dispatch(cli: Cli) -> Result<i32> {
                 }
             },
         },
-        Cmd::Run(a) => cmd_run(&db, a),
+        Cmd::Run(mut a) => {
+            a.customer = customer;
+            cmd_run(&db, a)
+        }
         Cmd::Report {
             run_id,
             format,
@@ -497,7 +558,7 @@ fn dispatch(cli: Cli) -> Result<i32> {
         } => {
             let s = store(&db)?;
             let d = ReportData::from_store(&s, run_id).map_err(invalid)?;
-            let aud = if audience == AudienceArg::Customer {
+            let aud = if customer || audience == AudienceArg::Customer {
                 Audience::Customer
             } else {
                 Audience::Internal
@@ -721,6 +782,7 @@ fn dispatch(cli: Cli) -> Result<i32> {
                 safety_profile: None,
                 fixture_mode: run.fixture,
                 no_db: false,
+                customer: false,
             };
             let r = cmd_run(&db, args);
             let _ = std::fs::remove_file(&tmp);
@@ -895,15 +957,20 @@ fn cmd_run(db: &Option<PathBuf>, a: RunArgs) -> Result<i32> {
     }
     println!("Overall: {}", summary.overall.label());
     if let (Some(dir), Some(st), Some(id)) = (&a.output, &s, summary.run_id) {
+        let aud = if a.customer {
+            Audience::Customer
+        } else {
+            Audience::Internal
+        };
         let d = ReportData::from_store(st, id).map_err(|e| anyhow!(e))?;
         std::fs::create_dir_all(dir)?;
         write_atomic(
             &dir.join("report.html"),
-            be_reporting::to_html(&d, Audience::Internal).as_bytes(),
+            be_reporting::to_html(&d, aud).as_bytes(),
         )?;
         write_atomic(
             &dir.join("report.json"),
-            be_reporting::to_json(&d, Audience::Internal).as_bytes(),
+            be_reporting::to_json(&d, aud).as_bytes(),
         )?;
         write_atomic(
             &dir.join("results.csv"),
@@ -913,10 +980,7 @@ fn cmd_run(db: &Option<PathBuf>, a: RunArgs) -> Result<i32> {
             &dir.join("measurements.csv"),
             be_reporting::measurements_csv(&d).as_bytes(),
         )?;
-        write_atomic(
-            &dir.join("report.pdf"),
-            &be_reporting::pdf::to_pdf(&d, Audience::Internal),
-        )?;
+        write_atomic(&dir.join("report.pdf"), &be_reporting::pdf::to_pdf(&d, aud))?;
         println!("Reports written to {} (run {id})", dir.display());
     } else if a.output.is_some() {
         eprintln!("Reports require the database (omit --no-db).");

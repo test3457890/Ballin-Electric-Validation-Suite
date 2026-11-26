@@ -14,8 +14,17 @@ All notable changes to BE Validation. Versions before 1.0 are development builds
   - new fault codes BE-GPU-002, 010, 011, 012, 021 and 030, and BE-PCIE-004.
 
   Tested on a software Vulkan device only.
+- Fault isolation (`bevalidate analyze`, `bevalidate follow-up`, GUI *Run Follow-up*): rule-based likely causes with confidence and suggested follow-up tests. Follow-up profiles are never release-eligible.
+- Windows WHEA event classification (IDs 17, 18, 19 and 47) in the hardware error log review.
+- Windows Job Object containment: the worker and all of its children are terminated with the supervisor.
+- Native PDF reports (CLI `report --format pdf`, `report.pdf` after each run, GUI *Export Report (PDF)*).
+- Restricted customer mode (`--customer`, `BE_VALIDATION_MODE=customer`, or the `customer-edition` build feature): only Quick Diagnostics, no manufacturing records or authorization, customer-audience reports.
 - Windows x64 portable development build (MSVC, static CRT) and Linux tar.gz/.deb packages, built by `.github/workflows/release.yml` and published as a GitHub *prerelease* with SHA-256 checksums.
 - Documentation: Windows installation and operation, physical hardware testing guide, known limitations and troubleshooting.
+
+### Fixed
+- Linux .deb file name no longer contains `~` (GitHub renamed the asset, so it did not match `SHA256SUMS.txt` in v0.1.0-alpha).
+- GUI test table: arrow-key row navigation selects the row.
 
 ### Changed
 - Release binaries keep line tables only (smaller downloads, readable backtraces).

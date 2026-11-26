@@ -6,7 +6,7 @@
 
 Professional hardware diagnostics, stability testing, factory burn-in and manufacturing quality assurance.
 
-[Interface preview](#interface-preview) · [Screenshots](#application-screenshots) · [Download](#download-development-builds) · [Capabilities](#planned-capabilities) · [Factory workflow](#factory-workflow) · [Development documentation](#development-documentation)
+[Interface preview](#interface-preview) · [Screenshots](#application-screenshots) · [Download](#download-development-builds) · [Capabilities](#capabilities) · [Factory workflow](#factory-workflow) · [Development documentation](#development-documentation)
 
 > Development project. This repository contains the product specification, the approved interface concept and an early Rust implementation (engine 0.1.0) that has been tested with fixtures and on a cloud Linux development VM only. The capabilities below are development targets, not claims of a released or physically validated application. Consult the development status document and capability matrix for implementation evidence.
 
@@ -46,18 +46,22 @@ Development builds are published as GitHub **prereleases** (see the repository's
 
 These are **unsigned development builds, not production releases**, and have not been validated on physical BE-01 hardware. Read [Windows installation and operation](Ballin%20Electric%20Validation%20Suite/docs/Windows%20Development%20Build.md), the [physical hardware testing guide](Ballin%20Electric%20Validation%20Suite/docs/Physical%20Hardware%20Testing%20Guide.md) and the [known limitations and troubleshooting](Ballin%20Electric%20Validation%20Suite/docs/Known%20Limitations%20and%20Troubleshooting.md) before use. Changes are tracked in the [changelog](Ballin%20Electric%20Validation%20Suite/CHANGELOG.md).
 
-## Planned capabilities
+## Capabilities
 
-| Module | Intended scope |
+Status as of the current `main` branch. "Implemented" means the code exists and passes automated tests. **Nothing is verified on physical hardware yet**; see the [capability matrix](Ballin%20Electric%20Validation%20Suite/docs/Capability%20Matrix.md) for details.
+
+| Module | Status |
 | :-- | :-- |
-| System inventory | CPU, memory, GPUs, storage, motherboard, firmware and connected devices |
-| Hardware diagnostics | Known-answer tests, error detection, evidence collection and targeted follow-up |
-| Stability & burn-in | CPU, RAM, GPU, VRAM and combined system workloads with controlled safety limits |
-| Live monitoring | Temperature, clock, fan and power telemetry where supported |
-| Factory quality control | Build records, test profiles, manual inspection, rework and shipment holds |
-| Service & troubleshooting | Diagnostic codes, fault isolation, baseline comparison and service history |
-| Reporting | Traceable validation records and printable reports |
-| Preboot diagnostics | OS-independent checks and recovery environment, subject to implementation |
+| System inventory (CPU, memory, GPUs, storage, PCI, network, USB, firmware) | Implemented on Linux and Windows |
+| Hardware diagnostics (CPU and RAM known-answer, storage integrity, log, PCIe, network and firmware reviews) | Implemented |
+| GPU diagnostics (Vulkan compute known-answer, VRAM patterns, graphics stress, multi-GPU) | Implemented; tested on a software Vulkan device only |
+| Stability & burn-in (CPU, RAM, GPU and combined workloads) | Implemented; never run under load (needs authorization and an approved safety profile) |
+| Live monitoring (temperature, clock, fan, power, throttling) | Implemented where the OS or driver exposes sensors |
+| Factory quality control (units, checklists, waivers, holds, rework, release approval) | Implemented |
+| Service & troubleshooting (fault codes, fault isolation, follow-up tests, baselines, service history) | Implemented |
+| Reporting (HTML, PDF, JSON, CSV; customer redaction) | Implemented; records are not yet signed |
+| Restricted customer mode | Implemented |
+| Installer, code signing, signed records, preboot diagnostics | Planned |
 
 Windows and Linux are target platforms. Support for individual devices, drivers, APIs and test backends must be demonstrated before it is claimed.
 

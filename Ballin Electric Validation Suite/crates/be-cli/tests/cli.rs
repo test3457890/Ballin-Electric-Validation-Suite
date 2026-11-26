@@ -187,3 +187,38 @@ fn high_load_without_authorization_is_not_run() {
     assert_eq!(code(&o), 2);
     assert!(String::from_utf8_lossy(&o.stderr).contains("not approved"));
 }
+
+#[test]
+fn customer_mode_refuses_restricted_commands() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("t.db");
+    // Read-only commands stay available.
+    let o = run(&db, &["--customer", "capabilities", "--format", "json"]);
+    assert_eq!(code(&o), 0);
+    // Manufacturing records, non-Quick profiles and high load are refused.
+    for args in [
+        &["--customer", "audit"][..],
+        &["--customer", "run", "--profile", "standard"],
+        &[
+            "--customer",
+            "run",
+            "--profile",
+            "quick",
+            "--authorize-high-load",
+        ],
+        &["--customer", "run", "--profile", "quick", "--unit", "SN-1"],
+    ] {
+        let o = run(&db, args);
+        assert_eq!(code(&o), 6, "{args:?} should be refused");
+        assert!(String::from_utf8_lossy(&o.stderr).contains("Not permitted"));
+    }
+    // The environment variable enables the same restrictions.
+    let o = Command::new(bin())
+        .arg("--db")
+        .arg(&db)
+        .arg("audit")
+        .env("BE_VALIDATION_MODE", "customer")
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 6);
+}

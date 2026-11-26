@@ -62,6 +62,7 @@ pub enum Msg {
     SaveJson,
     ExportCsv,
     ExportHtml(bool),
+    ExportPdf,
     Print,
     Backup,
     SupportBundle,
@@ -105,6 +106,7 @@ struct State {
     theme: Theme,
     operator: String,
     fixture_mode: bool,
+    customer: bool,
     db_path: PathBuf,
     store: Option<be_storage::Store>,
     store_error: Option<String>,
@@ -319,6 +321,12 @@ fn build_ui(s: &Sender<Msg>, th: &Theme, fixture: bool) -> Ui {
         "&File/Export &Report (HTML)...",
         Shortcut::Ctrl | 'e',
         Msg::ExportHtml(false),
+    );
+    m(
+        &mut menu,
+        "&File/Export Report (P&DF)...",
+        Shortcut::None,
+        Msg::ExportPdf,
     );
     m(
         &mut menu,
@@ -1314,6 +1322,8 @@ fn update_status(ui: &mut Ui, st: &State) {
     ));
     let mode = if st.fixture_mode {
         "FIXTURE MODE"
+    } else if st.customer {
+        "Customer mode"
     } else {
         "Live"
     };
@@ -1704,6 +1714,40 @@ fn update_detail(ui: &mut Ui, st: &State) {
         f.redraw();
     }
     update_controls(ui, st);
+}
+
+fn apply_customer_restrictions(ui: &mut Ui) {
+    for path in [
+        "&Manufacturing",
+        "&Tests/&Authorize High-Load Testing...",
+        "&Tests/Re&voke High-Load Authorization",
+        "&File/Database &Backup...",
+        "T&ools/&Audit Log...",
+    ] {
+        let idx = ui.menu.find_index(path);
+        if idx >= 0 {
+            ui.menu.remove(idx);
+        }
+    }
+    let mut prof_items = Vec::new();
+    for p in be_engine::builtin_profiles() {
+        if p.id != "quick" {
+            prof_items.push(format!("&Tests/Profile/{}", p.name.replace('/', "\\/")));
+        }
+    }
+    for path in prof_items {
+        let idx = ui.menu.find_index(&path);
+        if idx >= 0 {
+            ui.menu.remove(idx);
+        }
+    }
+    ui.profile_choice.clear();
+    ui.profile_choice.add_choice("Quick Diagnostics");
+    ui.profile_choice.set_value(0);
+    ui.tabs.remove(&ui.tab_mfg);
+    ui.tabs.set_value(&ui.tab_tests).ok();
+    ui.win
+        .set_label(&format!("{} — Customer Diagnostics", be_core::PRODUCT_NAME));
 }
 
 fn analysis_text(a: &be_core::isolation::Analysis) -> String {
@@ -2224,34 +2268,36 @@ fn build_tree(ui: &mut Ui, st: &mut State) {
             ],
         );
     }
-    let units = st
-        .store
-        .as_ref()
-        .and_then(|s| s.list_units().ok())
-        .unwrap_or_default();
-    put(
-        &mut t,
-        "Manufacturing",
-        "Manufacturing",
-        vec![kv("Unit records", units.len().to_string())],
-    );
-    for u in units.iter().take(200) {
+    if !st.customer {
+        let units = st
+            .store
+            .as_ref()
+            .and_then(|s| s.list_units().ok())
+            .unwrap_or_default();
         put(
             &mut t,
-            &format!("Manufacturing/{}", tree_label(&u.serial)),
-            &u.serial,
-            vec![kv("Release state", u.release_state.label().into())],
+            "Manufacturing",
+            "Manufacturing",
+            vec![kv("Unit records", units.len().to_string())],
+        );
+        for u in units.iter().take(200) {
+            put(
+                &mut t,
+                &format!("Manufacturing/{}", tree_label(&u.serial)),
+                &u.serial,
+                vec![kv("Release state", u.release_state.label().into())],
+            );
+        }
+        put(
+            &mut t,
+            "Service Records",
+            "Service Records",
+            vec![kv(
+                "View",
+                "Select a unit on the Manufacturing tab to see its service history".into(),
+            )],
         );
     }
-    put(
-        &mut t,
-        "Service Records",
-        "Service Records",
-        vec![kv(
-            "View",
-            "Select a unit on the Manufacturing tab to see its service history".into(),
-        )],
-    );
     put(
         &mut t,
         "Event Logs",
@@ -2976,26 +3022,36 @@ fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
             ui.tabs.set_value(&ui.tab_tests).ok();
             ui.tabs.redraw();
         }
-        Msg::SaveJson | Msg::ExportCsv | Msg::ExportHtml(_) | Msg::Print => {
+        Msg::SaveJson | Msg::ExportCsv | Msg::ExportHtml(_) | Msg::ExportPdf | Msg::Print => {
             let Some(d) = current_report(st) else {
                 return dialogs::alert(
                     "No stored run is available yet. Run a profile first (results are stored in the local database).",
                 );
             };
-            let (content, ext, label) = match &msg {
+            let aud = if st.customer {
+                be_reporting::Audience::Customer
+            } else {
+                be_reporting::Audience::Internal
+            };
+            let (content, ext, label): (Vec<u8>, &str, &str) = match &msg {
                 Msg::SaveJson => (
-                    be_reporting::to_json(&d, be_reporting::Audience::Internal),
+                    be_reporting::to_json(&d, aud).into_bytes(),
                     "json",
                     "JSON results",
                 ),
-                Msg::ExportCsv => (be_reporting::results_csv(&d), "csv", "CSV results"),
+                Msg::ExportCsv => (
+                    be_reporting::results_csv(&d).into_bytes(),
+                    "csv",
+                    "CSV results",
+                ),
+                Msg::ExportPdf => (be_reporting::pdf::to_pdf(&d, aud), "pdf", "PDF report"),
                 Msg::ExportHtml(true) => (
-                    be_reporting::to_html(&d, be_reporting::Audience::Customer),
+                    be_reporting::to_html(&d, be_reporting::Audience::Customer).into_bytes(),
                     "html",
                     "customer report",
                 ),
                 _ => (
-                    be_reporting::to_html(&d, be_reporting::Audience::Internal),
+                    be_reporting::to_html(&d, aud).into_bytes(),
                     "html",
                     "report",
                 ),
@@ -3009,7 +3065,7 @@ fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
                     ));
                 }
                 let path = dir.join(format!("run-{}-report.html", d.run.id));
-                match dialogs::write_atomic(&path, content.as_bytes()) {
+                match dialogs::write_atomic(&path, &content) {
                     Ok(()) => {
                         let opened = dialogs::open_in_system_viewer(&path);
                         info(
@@ -3037,7 +3093,7 @@ fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
             ) else {
                 return;
             };
-            match dialogs::write_atomic(&path, content.as_bytes()) {
+            match dialogs::write_atomic(&path, &content) {
                 Ok(()) => info(
                     ui,
                     st,
@@ -3560,6 +3616,14 @@ fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let fixture_mode = args.iter().any(|a| a == "--fixture-mode");
+    // Restricted customer diagnostic mode (usability restriction, not a
+    // security boundary): no manufacturing records, no high-load
+    // authorization, Quick profile only, redacted reports.
+    let customer = cfg!(feature = "customer-edition")
+        || args.iter().any(|a| a == "--customer")
+        || std::env::var("BE_VALIDATION_MODE")
+            .map(|v| v.eq_ignore_ascii_case("customer"))
+            .unwrap_or(false);
     let db_arg = args
         .iter()
         .position(|a| a == "--db")
@@ -3586,11 +3650,18 @@ fn main() {
     let operator = std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
         .unwrap_or_else(|_| "Local".into());
-    let profiles = be_engine::builtin_profiles();
+    let profiles: Vec<Profile> = be_engine::builtin_profiles()
+        .into_iter()
+        .filter(|p| !customer || p.id == "quick")
+        .collect();
+    if customer {
+        apply_customer_restrictions(&mut ui);
+    }
     let mut st = State {
         theme,
         operator: operator.clone(),
         fixture_mode,
+        customer,
         db_path,
         store,
         store_error,
