@@ -839,13 +839,13 @@ fn dispatch(cli: Cli) -> Result<i32> {
                 .and_then(|s| s.events(None, 500).ok())
                 .unwrap_or_default();
             let bundle = serde_json::json!({
-                "bundle_schema": 1,
+                "bundle_schema": 2,
                 "generated_utc": UtcMillis::now().to_rfc3339(),
                 "engine_version": be_core::ENGINE_VERSION,
                 "redaction": "hostname, serial numbers and MAC addresses removed",
                 "inventory": inv,
                 "capabilities": be_engine::capabilities(p.as_ref()),
-                "recent_events": events,
+                "recent_events": events.iter().map(EventRecord::support_metadata).collect::<Vec<_>>(),
             });
             write_atomic(&out, serde_json::to_string_pretty(&bundle)?.as_bytes())?;
             println!(

@@ -200,6 +200,18 @@ pub fn run_supervised(
     };
     let (containment, containment_warning) = Containment::attach(&child);
     if let Some(w) = containment_warning {
+        if cfg.high_load_authorized {
+            kill_tree(&mut child, &containment);
+            return failed(
+                test_id,
+                TestStatus::NotRun,
+                "BE-SYS-001",
+                "High-load worker containment failed",
+                w,
+                prov,
+                started,
+            );
+        }
         on_event(SupervisorEvent::Log {
             level: EventLevel::Warn,
             code: None,
@@ -280,7 +292,7 @@ pub fn run_supervised(
     let mut next_sample = Instant::now();
     let tick = Duration::from_millis(50);
 
-    let outcome: Result<TestResult, (TestStatus, &str, &str, String)> = loop {
+    let outcome: Result<TestResult, (TestStatus, &str, &str, String)> = 'supervise: loop {
         // Safety monitoring.
         if let Some(m) = monitor.as_deref_mut()
             && Instant::now() >= next_sample
@@ -351,15 +363,12 @@ pub fn run_supervised(
         match rx.recv_timeout(tick) {
             Err(RecvTimeoutError::Timeout) => continue,
             Err(RecvTimeoutError::Disconnected) | Ok(Inbound::Eof) => {
-                let status = child.wait().ok();
+                kill_tree(&mut child, &containment);
                 break Err((
                     TestStatus::Fail,
                     "BE-SYS-001",
                     "Worker exited without a result",
-                    format!(
-                        "exit status: {}",
-                        status.map(|s| s.to_string()).unwrap_or("unknown".into())
-                    ),
+                    "Worker output closed before a terminal result arrived".into(),
                 ));
             }
             Ok(Inbound::Bad(e)) => {
@@ -406,14 +415,36 @@ pub fn run_supervised(
                         ));
                     }
                     WorkerMessage::Result { result } => {
+                        if result.test_id != test_id || !result.status.is_terminal() {
+                            kill_tree(&mut child, &containment);
+                            break Err((
+                                TestStatus::Inconclusive,
+                                "BE-SYS-001",
+                                "Invalid worker result",
+                                "Unexpected test identifier or nonterminal status".into(),
+                            ));
+                        }
                         // Give the worker a moment to exit cleanly.
                         let t = Instant::now();
                         loop {
                             match child.try_wait() {
-                                Ok(Some(_)) => break,
+                                Ok(Some(status)) if status.success() => break,
+                                Ok(Some(status)) => {
+                                    break 'supervise Err((
+                                        TestStatus::Inconclusive,
+                                        "BE-SYS-001",
+                                        "Worker exited unsuccessfully after reporting",
+                                        status.to_string(),
+                                    ));
+                                }
                                 _ if t.elapsed() > Duration::from_secs(2) => {
                                     kill_tree(&mut child, &containment);
-                                    break;
+                                    break 'supervise Err((
+                                        TestStatus::Aborted,
+                                        "BE-SYS-002",
+                                        "Worker failed to exit after reporting",
+                                        "forced termination".into(),
+                                    ));
                                 }
                                 _ => std::thread::sleep(Duration::from_millis(10)),
                             }

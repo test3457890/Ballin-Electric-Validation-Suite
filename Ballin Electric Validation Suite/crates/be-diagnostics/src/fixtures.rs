@@ -108,6 +108,8 @@ impl DiagnosticTest for Flood {
     fn run(&self, ctx: &TestContext) -> TestResult {
         let big = "x".repeat(be_core::ipc::MAX_LINE_BYTES + 10);
         (ctx.log)(EventLevel::Info, None, &big);
-        Sleep.run(ctx)
+        let mut result = Sleep.run(ctx);
+        result.test_id = self.descriptor().id;
+        result
     }
 }

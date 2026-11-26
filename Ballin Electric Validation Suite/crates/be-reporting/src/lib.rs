@@ -148,6 +148,9 @@ fn redact_json(v: &mut serde_json::Value) {
         }
     }
     if let Some(o) = v.as_object_mut() {
+        if let Some(evaluation) = o.get_mut("evaluation").and_then(|e| e.as_object_mut()) {
+            evaluation.remove("notes");
+        }
         o.remove("events");
         o.remove("dispositions");
         if let Some(u) = o.get_mut("unit").and_then(|u| u.as_object_mut()) {
@@ -165,6 +168,14 @@ fn redact_json(v: &mut serde_json::Value) {
         if let Some(inv) = o.get_mut("inventory").and_then(|i| i.as_object_mut()) {
             if let Some(sys) = inv.get_mut("system").and_then(|s| s.as_object_mut()) {
                 sys.remove("hostname");
+                sys.remove("serial");
+            }
+            if let Some(disks) = inv.get_mut("storage").and_then(|v| v.as_array_mut()) {
+                for disk in disks {
+                    if let Some(fields) = disk.as_object_mut() {
+                        fields.remove("serial");
+                    }
+                }
             }
             if let Some(net) = inv.get_mut("network").and_then(|n| n.as_array_mut()) {
                 for n in net {
@@ -186,7 +197,8 @@ fn redact_json(v: &mut serde_json::Value) {
 
 fn csv_field(s: &str) -> String {
     // Neutralize spreadsheet formula injection and quote.
-    let s = if s.starts_with(['=', '+', '-', '@']) {
+    let s = if s.trim_start().starts_with(['=', '+', '-', '@']) || s.starts_with(['\t', '\r', '\n'])
+    {
         format!("'{s}")
     } else {
         s.to_string()
@@ -719,6 +731,23 @@ mod tests {
         let m = measurements_csv(&d);
         assert!(m.contains("Unavailable"));
         assert_eq!(csv_field("=1+1"), "\"'=1+1\"");
+    }
+
+    #[test]
+    fn customer_json_omits_waiver_notes_and_inventory_serials() {
+        let mut value = serde_json::json!({
+            "evaluation": {"notes": ["reviewer name and reason"], "blockers": ["missing check"]},
+            "inventory": {"system": {"serial": "system123"}, "storage": [{"serial": "disk123", "model": "SSD"}]}
+        });
+        redact_json(&mut value);
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "evaluation": {"blockers": ["missing check"]},
+                "inventory": {"system": {}, "storage": [{"model": "SSD"}]}
+            })
+        );
+        assert_eq!(csv_field("  =1+1"), "\"'  =1+1\"");
     }
 
     #[test]

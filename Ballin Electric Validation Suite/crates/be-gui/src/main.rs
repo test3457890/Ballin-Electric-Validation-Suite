@@ -1719,6 +1719,8 @@ fn update_detail(ui: &mut Ui, st: &State) {
 fn apply_customer_restrictions(ui: &mut Ui) {
     for path in [
         "&Manufacturing",
+        "&Diagnostics/Run &Selected Test Only (Targeted)",
+        "&Diagnostics/Run &Follow-up Sequence (from fault isolation)",
         "&Tests/&Authorize High-Load Testing...",
         "&Tests/Re&voke High-Load Authorization",
         "&File/Database &Backup...",
@@ -1741,6 +1743,7 @@ fn apply_customer_restrictions(ui: &mut Ui) {
             ui.menu.remove(idx);
         }
     }
+    ui.btn_targeted.hide();
     ui.profile_choice.clear();
     ui.profile_choice.add_choice("Quick Diagnostics");
     ui.profile_choice.set_value(0);
@@ -2781,6 +2784,27 @@ fn require_unit(st: &State) -> Option<String> {
 }
 
 fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
+    if st.customer
+        && matches!(
+            msg,
+            Msg::RunTargeted
+                | Msg::RunFollowUp
+                | Msg::AuthorizeHighLoad
+                | Msg::NewUnit
+                | Msg::UseUnitForRuns
+                | Msg::ClearUnit
+                | Msg::ManualChecks
+                | Msg::EvaluateRelease
+                | Msg::ApproveRelease
+                | Msg::HoldUnit(_)
+                | Msg::ServiceRecord
+                | Msg::RecordBaseline
+                | Msg::Backup
+                | Msg::AuditLog
+        )
+    {
+        return;
+    }
     match msg {
         Msg::Scan => {
             if st.run.is_some() {
@@ -3127,7 +3151,7 @@ fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
             }
         }
         Msg::SupportBundle => {
-            let txt = "Create a support bundle file?\n\nIt contains inventory (with host name, serial numbers and MAC addresses removed), capabilities and recent events.\nIt is saved locally only; nothing is uploaded.";
+            let txt = "Create a support bundle file?\n\nIt contains inventory (with host name, serial numbers and MAC addresses removed), capabilities and recent event timestamps, levels and codes.\nIt is saved locally only; nothing is uploaded.";
             if dialogs::confirm(txt, "Create", "Cancel") != Some(0) {
                 return;
             }
@@ -3142,13 +3166,13 @@ fn handle(ui: &mut Ui, st: &mut State, s: &Sender<Msg>, msg: Msg) {
             inv.storage.iter_mut().for_each(|d| d.serial = None);
             inv.network.iter_mut().for_each(|n| n.mac = None);
             let bundle = serde_json::json!({
-                "bundle_schema": 1,
+                "bundle_schema": 2,
                 "generated_utc": UtcMillis::now().to_rfc3339(),
                 "engine_version": be_core::ENGINE_VERSION,
                 "redaction": "hostname, serial numbers and MAC addresses removed",
                 "inventory": inv,
                 "capabilities": st.caps,
-                "recent_events": st.events.iter().rev().take(500).collect::<Vec<_>>(),
+                "recent_events": st.events.iter().rev().take(500).map(EventRecord::support_metadata).collect::<Vec<_>>(),
             });
             match dialogs::write_atomic(
                 &path,
@@ -3624,6 +3648,10 @@ fn main() {
         || std::env::var("BE_VALIDATION_MODE")
             .map(|v| v.eq_ignore_ascii_case("customer"))
             .unwrap_or(false);
+    if customer && fixture_mode {
+        eprintln!("Customer mode does not allow fixture runs.");
+        std::process::exit(6);
+    }
     let db_arg = args
         .iter()
         .position(|a| a == "--db")
