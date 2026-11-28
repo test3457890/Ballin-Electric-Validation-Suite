@@ -28,15 +28,15 @@ jobs:
         shell: bash
         working-directory: Ballin Electric Validation Suite
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Linux native dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y cmake libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libfontconfig-dev libpango1.0-dev libcairo2-dev libglu1-mesa-dev xvfb xauth mesa-vulkan-drivers libvulkan1
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
           toolchain: "1.97.0"
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: "Ballin Electric Validation Suite -> target"
       - name: Format
@@ -62,11 +62,11 @@ jobs:
       run:
         working-directory: Ballin Electric Validation Suite
     steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
           toolchain: "1.97.0"
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@073e1fd0bc889c9aee68dbaaa927cde1b5653a83 # v2
         with:
           tool: cargo-deny,cargo-audit
       - name: Licenses, bans, sources, advisories
